@@ -1,8 +1,8 @@
-%ESTIMATEOCP Estimate OCV-vs-SOC curve from dis/charge curves using the
+%ESTIMATEOCV Estimate OCV-vs-SOC curve from dis/charge curves using the
 % four methods.
 %
 % -- Usage --
-% ocprel = ESTIMATEOCV(elec,config,arg)
+% ocvrel = estimateOCV(elec,config,OCPResolution,OCPEstimators)
 %
 % -- Input --
 % elec   = struct of electrode data from process[OCP|OCV].m

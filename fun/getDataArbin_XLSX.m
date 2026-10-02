@@ -1,6 +1,43 @@
+% GETDATAARBIN_XLSX Import and process Arbin battery test data from XLSX files.
+%
+% -- Usage --
+% test_data = getDataArbin_XLSX(file)
+% test_data = getDataArbin_XLSX(file,step2incrementCounter)
+% test_data = getDataArbin_XLSX(file,step2incrementCounter,save_path)
+%
+% -- Input --
+% file                  = path to one Arbin XLSX file. If multiple files
+%                         with the same base name and different _Wb_N
+%                         suffixes are present, they are automatically
+%                         detected and concatenated.
+% step2incrementCounter = step number used to reconstruct TC_Counter1
+%                         when the TC_Counter provided by Arbin is not
+%                         reliable (optional).
+% save_path             = directory where the processed MAT file is saved
+%                         (optional; defaults to the XLSX file directory).
+%
+% -- Output --
+% test_data = structure containing the processed test data, including:
+%             .raw          = raw measurement table
+%             .step         = step number vector
+%             .t             = test time [s]
+%             .i             = current [A]
+%             .v             = voltage [V]
+%             .Ah            = incremental capacity [Ah]
+%             .ch_capacity  = cumulative charge capacity [Ah]
+%             .dch_capacity = cumulative discharge capacity [Ah]
+%             .TC_Counter1  = cycle counter from Arbin or reconstructed
+%                             from step transitions when requested
+%
+% The function also detects auxiliary temperature, voltage and TC_Counter
+% columns and stores them as fields of test_data (e.g. T1, Aux_V1,
+% TC_Counter1).
+%
+% When step2incrementCounter is provided, TC_Counter1 is reconstructed
+% from changes in the specified step rather than using the counter
+% provided by the cycler.
+
 function test_data = getDataArbin_XLSX(file, step2incrementCounter, save_path)
-% Optimized function to extract Arbin cycler data (.xlsx)
-% Mondragon Unibertsitatea | 2024 (Updated 2026)
 
 [filePath, fileBaseName, ~] = fileparts(file);
 if nargin < 3 || isempty(save_path)
@@ -19,19 +56,23 @@ if exist(matFile, 'file')
 end
 
 %% --- Process Multiple Excel Files ---
-baseName   = regexprep(fileBaseName, '_Wb_\d+$', '');
-excelFiles = dir(fullfile(filePath, baseName + '_Wb_*.xlsx'));
+baseName = regexprep(fileBaseName, '_Wb_\d+$', '');
+excelFiles = dir(fullfile(filePath, [baseName '_Wb_*.xlsx']));
 if isempty(excelFiles)
-    % Fallback if the file doesn't follow the _Wb_N pattern
     fileNames = {fileBaseName + ".xlsx"};
 else
-    fileNames = sort({excelFiles.name});
+    wbNumbers = zeros(numel(excelFiles), 1);
+    for k = 1:numel(excelFiles)
+        token = regexp(excelFiles(k).name, '_Wb_(\d+)\.xlsx$', 'tokens', 'once');
+        wbNumbers(k) = str2double(token{1});
+    end
+    [~, order] = sort(wbNumbers);
+    fileNames = {excelFiles(order).name};
 end
 
+%% --- Main Loop ---
 test_data = struct();
 test_data.raw = table();
-
-%% --- Main Loop ---
 for k = 1:length(fileNames)
     file_k = fullfile(filePath, fileNames{k});
     sheets = sheetnames(file_k);

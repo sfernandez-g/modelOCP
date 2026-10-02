@@ -1,10 +1,11 @@
-%LINEARINTERP Linearly interpolate noisy data.
+% LINEARINTERP Linearly interpolate and extrapolate data.
 %
 % -- Usage --
 % yq = LINEARINTERP(x,y,xq)
 %
 % -- Input --
-% x,y = noisy vectors describing a monotonic function: y = f(x)
+% x,y = vectors describing a function y = f(x);
+%       x does not need to be sorted.
 % xq  = query points at which to evalulate the output
 %
 % -- Output --
@@ -59,23 +60,6 @@ function yq = linearinterp(x, y, xq)
     end
     
     % 3. x(1) < xq < x(end): linearly interpolate
-    % for k = 1:length(mid)
-    %   ind = mid(k);
-    %   xind = xq(ind);
-    %   if any(x==xind)
-    %     % Exactly at an x-value, no need to interpolate
-    %     % !!! may be more than one if duplicate x values present - use mean
-    %     yq(mid(k)) = mean(y(x==xind));
-    %   else
-    %     x2 = x(x>xind); x2 = x2(1);
-    %     y2 = y(x>xind); y2 = y2(1);
-    %     x1 = x(x<xind); x1 = x1(end);
-    %     y1 = y(x<xind); y1 = y1(end);
-    %     m = (y2-y1)/(x2-x1);
-    %     yq(ind) = y1 + m*(xind - x1);
-    %   end
-    % end
-    
     if any(mid)
         % Find interval index for each xq
         % bin(i) = k such that x(k) <= xq(i) < x(k+1)

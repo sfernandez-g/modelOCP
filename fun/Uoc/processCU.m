@@ -1,3 +1,54 @@
+% PROCESSCU Process constant-current/constant-voltage battery test data.
+%
+% -- Usage --
+% cal = processCU(test_data,cfg,voltChannels,voltChannelInd)
+%
+% -- Input --
+% test_data      = structure containing processed Arbin test data,
+%                  typically obtained from getDataArbin_XLSX.
+%
+% cfg            = structure array defining the test steps to be
+%                  extracted. Each element must contain:
+%                  .name    = name assigned to the step
+%                  .step    = Arbin step index
+%                  .counter = TC_Counter1 value used to identify
+%                             the corresponding cycle.
+%
+%                  Example:
+%                  cfg = struct('name', {'CC_dis','CV_dis','CC_chg','CV_chg'}, ...
+%                               'step', {5,6,3,4}, ...
+%                               'counter', {0,0,1,1});
+%
+% voltChannels   = cell array containing the voltage channel names
+%                  available in test_data.
+%
+% voltChannelInd = index selecting the voltage channel from voltChannels.
+%
+% -- Output --
+% cal = structure containing the processed constant-current/constant-
+%       voltage data, including:
+%       .name             = cell/test name
+%       .TdegC            = test temperature [degC]
+%       .Q25              = reference capacity at 25 degC [Ah]
+%       .C_rate_actual    = actual average C-rate [1/h]
+%       .disZ             = discharge SOC/lithiation vector [unitless]
+%       .disV             = discharge voltage vector [V]
+%       .disdZ           = discharge differential lithiation [1/V]
+%       .chgZ             = charge SOC/lithiation vector [unitless]
+%       .chgV             = charge voltage vector [V]
+%       .chgdZ            = charge differential lithiation [1/V]
+%       .disI             = discharge current vector [A]
+%       .chgI             = charge current vector [A]
+%
+% The function identifies the configured steps using both the Arbin
+% step index and TC_Counter1, extracts the corresponding charge and
+% discharge capacities, and normalizes each segment independently.
+%
+% The charge capacity is corrected using the charge/discharge efficiency
+% estimated from the selected steps. The discharge and charge voltage
+% curves are subsequently smoothed and their differential capacity
+% derivatives are calculated using smoothdiff.
+
 function cal = processCU(test_data, cfg, voltChannels, voltChannelInd)
 
 chCap  = test_data.ch_capacity;

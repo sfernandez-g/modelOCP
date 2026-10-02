@@ -5,12 +5,15 @@
 % [zout,vout,dz] = smoothdiff(z,v)
 % [zout,vout,dz] = smoothdiff(z,v,dv)
 % [zout,vout,dz] = smoothdiff(z,v,dv,tol)
+% [xout,vout,dx] = smoothdiff(x,v,dv,tol,n)
 %
 % -- Input --
 % z    = soc vector [unitless]
 % v    = voltage vector [V]
 % dv   = voltage resolution (default 1e-3) [V]
 % tol  = edge tolerance (default 5e-5) [V]
+% n    = number of points used to resample the x-v curve
+%        (default = number of input points) [unitless]
 %
 % -- Output --
 % zout = smoothed soc vector [unitless]
@@ -38,7 +41,7 @@ function [xout, vout, dx] = smoothdiff(x, v, dv, tol, n)
   x = x(:);
   v = v(:);
 
-  % x array monotonical.
+  % Remove consecutive duplicate x values.
   vec = [true; diff(x) ~= 0];
   x = x(vec);
   v = v(vec);
@@ -57,7 +60,6 @@ function [xout, vout, dx] = smoothdiff(x, v, dv, tol, n)
   % Define the new strictly monotonic x grid
   v = linearinterp(x, v, linspace(min(x), max(x), n)');
   x = linspace(min(x), max(x), n)';
-  nsamp = length(v);
   
   % Define voltage points.
   vmin = min(v) - tol;
@@ -66,7 +68,7 @@ function [xout, vout, dx] = smoothdiff(x, v, dv, tol, n)
   
   % Approximate differential capacity dz/dv.
   Nv = histcounts(v, length(vout));
-  dx = (max(x)-min(x))/nsamp*Nv/dv;
+  dx = (max(x)-min(x))/n*Nv/dv;
   
   % Interpolate output soc.
   xout = linearinterp(v, x, vout);
