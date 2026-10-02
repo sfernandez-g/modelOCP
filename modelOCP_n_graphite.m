@@ -5,17 +5,17 @@ RGB = orderedcolors("gem");
 addpath("fun\"); addpath("fun\Uoc\");
 
 %% process OCP data
-file      = 'input\pos\checkUp_LGMH1_PAT20261302_NMC3_Li_T25_Channel_16_Wb_1.xlsx';
+file      = 'input\neg\checkUp_LGMH1_PAT20261302_G1_Li_T25_Channel_2_Wb_1.xlsx';
 %--------------------------------------------------------------------------
-cellName  = 'LG MH1 PAT half-cell PE'; 
+cellName  = 'LG MH1 PAT half-cell NE'; 
 %--------------------------------------------------------------------------
-v_range   = [3 4.3];
+v_range   = [0 1.5];
 % -------------------------------------------------------------------------
 sol_range   = [0 1];
 % -------------------------------------------------------------------------
-load("output\theoPracCapPos.mat");
+load("output\theoPracCapNeg.mat");
 Q_r     = Q_r*1e-3;
-AM_per  = 0.96;          % Rojas 2024
+AM_per  = 0.98;          % Rojas 2024
 Q_r_AM  = Q_r*AM_per;
 % -------------------------------------------------------------------------
 test_data = getDataArbin_XLSX(file, 7); % filename, step where TC increments
@@ -30,7 +30,7 @@ cfg = struct('name', {'CC_dis','CV_dis','CC_chg','CV_chg'}, ... % test phases
              'counter', {1, 1, 1, 1} ...                        % counter values of phases for processing
              );
 voltChannels = {'MainVolt'};
-filtv        = [3, 4.3];
+filtv        = [0, 1.5];
 cal = processCU(test_data, cfg, voltChannels, 1); % test data, processing config, voltChannels
 
 %% Estimate OCP
@@ -64,10 +64,36 @@ legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', 
 ylim(v_range); xlim(sol_range);
 title('OCP vs. Relative degree of lithiation');
 drawnow
+% -------------------------------------------------------------------------
+figure;
+for k = 1:length(ocvrel.estimates)
+    plot(ocvrel.estimates(k).U, ocvrel.estimates(k).dZ); hold on
+end
+pptFormatMultiplePlots('Times New Roman')
+ylabel('d$\tilde{\theta}_\mathrm{s}$/dU', Interpreter='latex'); 
+xlabel('Potential vs. Li (V)');
+legend('$U_\mathrm{ocp}^\mathrm{chg}$', '$U_\mathrm{ocp}^\mathrm{dch}$', '$U_\mathrm{ocp}^\mathrm{avg}$', Location='best'); 
+legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', Location='best', IconColumnWidth=15)
+xlim(v_range);
+title('Differential SOL vs OCP');
+drawnow
+% -------------------------------------------------------------------------
+figure;
+for k = 1:length(ocvrel.estimates)
+    plot(1-ocvrel.estimates(k).Z, ocvrel.estimates(k).dZ); hold on
+end
+pptFormatMultiplePlots('Times New Roman')
+ylabel('d$\tilde{\theta}_\mathrm{s}$/dU', Interpreter='latex'); 
+xlabel('Relative degree of lithiation $\tilde{\theta}_\mathrm{s}$', Interpreter='latex');
+legend('$U_\mathrm{ocp}^\mathrm{chg}$', '$U_\mathrm{ocp}^\mathrm{dch}$', '$U_\mathrm{ocp}^\mathrm{avg}$', Location='best'); 
+legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', Location='best', IconColumnWidth=15)
+xlim(sol_range);
+title('Differential SOL vs SOL');
+drawnow
 
 %% Rough estimate of absolute lithiation
-ocvrel.theta_max = 1;                                                      % Assume we reach maximum lithiation
-ocvrel.theta_min = 1 - max((1-ocvrel.estimates(1).Z)).*ocvrel.Q/Q_r_AM;    % Based on "charge" data asuming it starts from a completely lithiated state                                             % Assume we reach minimum lithiation
+ocvrel.theta_max = max((1-ocvrel.estimates(2).Z)).*ocvrel.Q/Q_r_AM; % Based on "discharge" data asumming it starts from a completely delithiated state
+ocvrel.theta_min = 0;                                               % Assume we reach minimum lithiation
 for k = 1:length(ocvrel.estimates)                                         
     Z = 1 - ocvrel.estimates(k).Z;                                  % Change SOC to relative lithiation
     ocvrel.estimates(k).theta = ocvrel.theta_min + Z .* (ocvrel.theta_max - ocvrel.theta_min);
@@ -89,29 +115,28 @@ drawnow
 
 %% MSMR model fit
 % --------------------------------------------------- MSMR Guess
-J = 4;
-[U0, X, w, diag] = guessMSMR(ocvrel, 4, 25)
-config.init.U0 = U0
-config.init.X = X
-config.init.w = w
+% [U0, X, w, diag] = guessMSMR(ocvrel, 6, 25);
+% config.init.U0 = U0;
+% config.init.X = X;
+% config.init.w = w;
 % --------------------------------------------------- Literature values
-% config.init.U0 = [3.580811; 3.739531; 3.998416; 4.18913]  % Garrick 2023
-% config.init.X = [0.164246; 0.367062; 0.31328; 0.155412]
-% config.init.w = [1.281307; 1.918194; 2.714622; 0.787826]
+config.init.U0 = [0.08843;0.12799;0.14331;0.16984;0.21446;0.36325]; % Verbrugge 2017
+config.init.X = [0.43336;0.23963;0.15018;0.05462;0.06744;0.0548];
+config.init.w = [0.08611;0.08009;0.72469;2.53277;0.09470;5.97354];
 config.init.thetamin = 0;
 config.init.thetamax = 1;
 % ---------------------------------------------------
 len = length(config.init.U0);
 % -------------------------------------------------- Literature based bounds
-config.lb.U0 = config.init.U0.*0.3;
-config.lb.X = config.init.X.*0.2;
-config.lb.w = config.init.w.*0.1;
+config.lb.U0 = config.init.U0.*0.5;
+config.lb.X = config.init.X.*0.4;
+config.lb.w = config.init.w.*0.2;
 config.lb.thetamin = 0-1e-10;
 config.lb.thetamax = 0.85;
 
-config.ub.U0 = config.init.U0./0.3;
-config.ub.X = config.init.X./0.2;
-config.ub.w = config.init.w./0.1;
+config.ub.U0 = config.init.U0./0.5;
+config.ub.X = config.init.X./0.4;
+config.ub.w = config.init.w./0.2;
 config.ub.thetamin = 0.1;
 config.ub.thetamax = 1+1e-10;
 % -------------------------------------------------- Aditional bounds or constraints
@@ -120,7 +145,7 @@ b = [];  % n x 1
 cons.A = A;
 cons.b = b;
 % -------------------------------------------------- Differential curve weight
-config.optw = 1e-2;
+config.optw = 1e-3;
 % -------------------------------------------------- Launch MSMR fit
 vis = 1;
 MSMR_curves = ["discharge", "charge", "diagonalAverage"];
@@ -138,18 +163,6 @@ for curve = MSMR_curves
     for k = Zmod'
         ocvrel.MSMR.(curve).U(end+1, 1) = fun(k);
     end
-
-    config.lb.U0 = config.init.U0.*0.8;
-    config.lb.X = config.init.X.*0.6;
-    config.lb.w = config.init.w.*0.4;
-    config.lb.thetamin = config.init.thetamin - 1e-2;
-    config.lb.thetamax = config.init.thetamax - 1e-2;
-    
-    config.ub.U0 = config.init.U0./0.8;
-    config.ub.X = config.init.X./0.6;
-    config.ub.w = config.init.w./0.4;
-    config.ub.thetamin = config.init.thetamin + 1e-2;
-    config.ub.thetamax = config.init.thetamax + 1e-2;
 end
 % -------------------------------------------------- Relative lithiation
 figure;
@@ -167,7 +180,7 @@ legend('C/100 dch', 'C/100 chg', 'C/100 avg', 'Model fit', Location='best')
 legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', Location='best', IconColumnWidth=15)
 ylim(v_range); xlim(sol_range)
 title('MSMR model fits');
-%%
+
 figure;
 for curve = MSMR_curves
     idx = find(string({ocvrel.estimates.name}) == curve, 1);
@@ -178,17 +191,16 @@ for curve = MSMR_curves
     for k = 1:numel(Zexp)
         Umodel(k) = funModel(Zexp(k));
     end
-    err = Umodel - Uexp;
-    plot(Zexp, err, 'LineWidth', 1.5, ...
-        'DisplayName', curve); hold on
+    err = Uexp - Umodel;
+    plot(Zexp, err); hold on
 end
 pptFormatMultiplePlots('Times New Roman');
-yline(0, 'k--');
 xlabel('Relative degree of lithiation $\tilde{\theta}_\mathrm{s}$', 'Interpreter', 'latex');
 ylabel('$U_\mathrm{MSMR}-U_\mathrm{exp}$ (V)', 'Interpreter', 'latex');
-legend('C/100 dch', 'C/100 chg', 'C/100 avg', 'Model fit', Location='best')
+legend('dch', 'chg', 'avg', Location='best')
 legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', Location='best', IconColumnWidth=15)
-title('MSMR  model error');
+ylim([-0.05 0.05]); xlim(sol_range)
+title('MSMR fits errors');
 
 % -------------------------------------------------- Average MSMR
 MSMR_curves(end+1) = "average";
@@ -228,25 +240,18 @@ ylim(v_range); xlim(sol_range);
 title('MSMR OCP models')
 drawnow
 
-%% Hidden gallery problem
-for curve = MSMR_curves
-    ocvrel.MSMR.(curve).params.thetamin = ocvrel.theta_min;
-    ocvrel.MSMR.(curve).params.thetamax = ocvrel.MSMR.(curve).params.thetamax;
-    ocvrel.MSMR.(curve).Zmod = ocvrel.MSMR.(curve).Zmod .* (ocvrel.MSMR.(curve).params.thetamax - ocvrel.MSMR.(curve).params.thetamin) + ...
-                               ocvrel.MSMR.(curve).params.thetamin;
-end
-ocvrel.theta_max_corr = max(ocvrel.MSMR.average.Zmod);
-ocvrel.theta_min_corr = min(ocvrel.MSMR.average.Zmod);
-% -------------------------------------------------- AM correction
-Q_MSMR      = ocvrel.Q/(ocvrel.MSMR.average.params.thetamax - ocvrel.MSMR.average.params.thetamin);
+%% AM correction
+Q_MSMR      = ocvrel.Q/(ocvrel.MSMR.diagonalAverage.params.thetamax - ocvrel.MSMR.diagonalAverage.params.thetamin);
 AM_per_diff = Q_MSMR/Q_r - AM_per;
 AM_per      = AM_per + AM_per_diff;
-Q_r_AM      = Q_r*AM_per;                             % corrected sample capacity
+Q_r_AM      = Q_r*AM_per;                          % corrected sample capacity
+ocvrel.theta_max_corr = max(ocvrel.MSMR.diagonalAverage.Zmod);
+ocvrel.theta_min_corr = min(ocvrel.MSMR.diagonalAverage.Zmod);
 % --------------------------------------------------
 idx = find(string({ocvrel.estimates.name}) == "diagonalAverage");
 figure
 plot(ocvrel.estimates(idx).theta, ocvrel.estimates(idx).U, DisplayName='$U_\mathrm{ocp}^\mathrm{avg, RE}$'); hold on
-plot(ocvrel.MSMR.average.Zmod, ocvrel.MSMR.average.U, DisplayName='$U_\mathrm{ocp}^\mathrm{avg, MSMR}$');
+plot(ocvrel.MSMR.diagonalAverage.Zmod, ocvrel.MSMR.diagonalAverage.U, DisplayName='$U_\mathrm{ocp}^\mathrm{avg, MSMR}$');
 pptFormatMultiplePlots('Times New Roman')
 xlabel('Absolute degree of lithiation $\theta_\mathrm{s}$', Interpreter='latex');
 ylabel('Potential vs. Li (V)');
@@ -314,5 +319,5 @@ model.UocpAvg = @(theta) interp1(Z_avg, U_avg, theta, 'linear', 'extrap');
 model.Q25 = ocvrel.Q;
 model.Qnom = Q_r_AM;
 % --------------------------------------------------
-fileName = sprintf('output/Uocp_p.mat');
+fileName = sprintf('output/Uocp_n.mat');
 save(fileName, 'model');

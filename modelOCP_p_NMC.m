@@ -64,6 +64,32 @@ legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', 
 ylim(v_range); xlim(sol_range);
 title('OCP vs. Relative degree of lithiation');
 drawnow
+% -------------------------------------------------------------------------
+figure;
+for k = 1:length(ocvrel.estimates)
+    plot(ocvrel.estimates(k).U, ocvrel.estimates(k).dZ); hold on
+end
+pptFormatMultiplePlots('Times New Roman')
+ylabel('d$\tilde{\theta}_\mathrm{s}$/dU', Interpreter='latex'); 
+xlabel('Potential vs. Li (V)');
+legend('$U_\mathrm{ocp}^\mathrm{chg}$', '$U_\mathrm{ocp}^\mathrm{dch}$', '$U_\mathrm{ocp}^\mathrm{avg}$', Location='best'); 
+legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', Location='best', IconColumnWidth=15)
+xlim(v_range);
+title('Differential SOL vs OCP');
+drawnow
+% -------------------------------------------------------------------------
+figure;
+for k = 1:length(ocvrel.estimates)
+    plot(1-ocvrel.estimates(k).Z, ocvrel.estimates(k).dZ); hold on
+end
+pptFormatMultiplePlots('Times New Roman')
+ylabel('d$\tilde{\theta}_\mathrm{s}$/dU', Interpreter='latex'); 
+xlabel('Relative degree of lithiation $\tilde{\theta}_\mathrm{s}$', Interpreter='latex');
+legend('$U_\mathrm{ocp}^\mathrm{chg}$', '$U_\mathrm{ocp}^\mathrm{dch}$', '$U_\mathrm{ocp}^\mathrm{avg}$', Location='best'); 
+legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', Location='best', IconColumnWidth=15)
+xlim(sol_range);
+title('Differential SOL vs SOL');
+drawnow
 
 %% Rough estimate of absolute lithiation
 ocvrel.theta_max = 1;                                                      % Assume we reach maximum lithiation
@@ -89,11 +115,10 @@ drawnow
 
 %% MSMR model fit
 % --------------------------------------------------- MSMR Guess
-J = 4;
-[U0, X, w, diag] = guessMSMR(ocvrel, 4, 25)
-config.init.U0 = U0
-config.init.X = X
-config.init.w = w
+[U0, X, w, diag] = guessMSMR(ocvrel, 4, 25);
+config.init.U0 = U0;
+config.init.X = X;
+config.init.w = w;
 % --------------------------------------------------- Literature values
 % config.init.U0 = [3.580811; 3.739531; 3.998416; 4.18913]  % Garrick 2023
 % config.init.X = [0.164246; 0.367062; 0.31328; 0.155412]
@@ -138,18 +163,6 @@ for curve = MSMR_curves
     for k = Zmod'
         ocvrel.MSMR.(curve).U(end+1, 1) = fun(k);
     end
-
-    config.lb.U0 = config.init.U0.*0.8;
-    config.lb.X = config.init.X.*0.6;
-    config.lb.w = config.init.w.*0.4;
-    config.lb.thetamin = config.init.thetamin - 1e-2;
-    config.lb.thetamax = config.init.thetamax - 1e-2;
-    
-    config.ub.U0 = config.init.U0./0.8;
-    config.ub.X = config.init.X./0.6;
-    config.ub.w = config.init.w./0.4;
-    config.ub.thetamin = config.init.thetamin + 1e-2;
-    config.ub.thetamax = config.init.thetamax + 1e-2;
 end
 % -------------------------------------------------- Relative lithiation
 figure;
