@@ -78,7 +78,6 @@ function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun] = fitMSMR(con
         % params.X = params.X(1:end-1);
         x = [params.U0; params.X; params.w; params.thetamin; params.thetamax];
     end
-
     function params = vectToParams(x, indU, indX, indW)
         x = x(:);
         params.U0 = x(indU);  

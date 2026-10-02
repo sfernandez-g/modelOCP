@@ -153,7 +153,7 @@ function [Z, U] = OCP_resistanceBlend(data, ~)
   IRblend3 = IR1C + (IR2C-IR1C)*blend(:);
   Vchg = chgV - IRblend3;
   
-  deltaV50 = interp1(chgZ,Vchg,0.5) - interp1(disZ,Vdis,0.5);
+  deltaV50 = linearinterp(chgZ,Vchg,0.5) - linearinterp(disZ,Vdis,0.5);
   ind  = find(chgZ < 0.5);
   vChg = Vchg(ind) - chgZ(ind)*deltaV50;
   zChg = chgZ(ind);
@@ -162,7 +162,7 @@ function [Z, U] = OCP_resistanceBlend(data, ~)
   zDis = flipud(disZ(ind));
   
   Z  = stdZ;
-  U  = interp1([zChg; zDis],[vChg; vDis],stdZ,'linear','extrap');  
+  U  = linearinterp([zChg; zDis],[vChg; vDis],stdZ);  
 end
   
 % OCP_VOLTAGEAVERAGE Method #2: voltage averaging
@@ -182,7 +182,7 @@ function [Z, U] = OCP_socAverage(data, ~)
   % Average soc under the same voltage
   z3 = (data.interp.chgZ+data.interp.disZ)/2;
   Z  = stdZ;
-  U  = interp1(z3,stdV,stdZ,'linear','extrap');
+  U  = linearinterp(z3,stdV,stdZ);
   
 end
   
@@ -229,10 +229,10 @@ function [Z, U] = OCP_diagonalAverage(data, config)
   % Interpolate ocv (using discharge data only)
   uuD = data.orig.disV+lagU/2;
   zzD = data.orig.disZ+lagZ/2;
-  U4D = interp1(zzD,uuD,stdZ,'linear','extrap');
+  U4D = linearinterp(zzD,uuD,stdZ);
   uuC = data.orig.chgV-lagU/2;
   zzC = data.orig.chgZ-lagZ/2;
-  U4C = interp1(zzC,uuC,stdZ,'linear','extrap');
+  U4C = linearinterp(zzC,uuC,stdZ);
   switch config.datype
     case 'useDis' % base off of discharge data
       U4 = U4D;

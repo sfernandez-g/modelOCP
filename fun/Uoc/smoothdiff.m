@@ -9,8 +9,8 @@
 % -- Input --
 % z    = soc vector [unitless]
 % v    = voltage vector [V]
-% dv   = voltage resolution (default 2e-3) [V]
-% tol  = edge tolerance (default 5e-3) [V]
+% dv   = voltage resolution (default 1e-3) [V]
+% tol  = edge tolerance (default 5e-5) [V]
 %
 % -- Output --
 % zout = smoothed soc vector [unitless]
@@ -32,24 +32,31 @@
 % Modified by Fernandez Gonzalez Sergio:
 % Added "x array monotonical" and some comments
 
-function [zout, vout, dz, du] = smoothdiff(z, v, dv, tol)
+function [xout, vout, dx] = smoothdiff(x, v, dv, tol, n)
 
-  % Always column vector.
-  z = z(:);
+  % Force column vector.
+  x = x(:);
   v = v(:);
 
   % x array monotonical.
-  vec = [true; diff(z) ~= 0];
-  z = z(vec);
+  vec = [true; diff(x) ~= 0];
+  x = x(vec);
   v = v(vec);
 
   % Initialization.
-  if ~exist('dv','var')
-    dv = 2e-3;
+  if ~exist('dv','var') || isempty(dv)
+    dv = 1e-3;
   end
-  if ~exist('tol','var')
+  if ~exist('tol','var') || isempty(tol)
     tol = 5e-5;
   end
+  if ~exist('n','var') || isempty(n)
+    n = length(v);
+  end
+
+  % Define the new strictly monotonic x grid
+  v = linearinterp(x, v, linspace(min(x), max(x), n)');
+  x = linspace(min(x), max(x), n)';
   nsamp = length(v);
   
   % Define voltage points.
@@ -59,20 +66,25 @@ function [zout, vout, dz, du] = smoothdiff(z, v, dv, tol)
   
   % Approximate differential capacity dz/dv.
   Nv = histcounts(v, length(vout));
-  dz = (max(z)-min(z))/nsamp*Nv/dv;
+  dx = (max(x)-min(x))/nsamp*Nv/dv;
   
   % Interpolate output soc.
-  zout = linearinterp(v, z, vout);
+  xout = linearinterp(v, x, vout);
   
   % Force the boundaries to agree with the original data-set.
-  [~,ind0] = min(zout); zout(ind0) = min(z); 
-  [~,ind1] = max(zout); zout(ind1) = max(z);
+  [~,ind0] = min(xout); xout(ind0) = min(x); 
+  [~,ind1] = max(xout); xout(ind1) = max(x);
   [~,ind0] = min(vout); vout(ind0) = min(v);
   [~,ind1] = max(vout); vout(ind1) = max(v);
   
-  % Collect output.
-  zout = zout(:); 
+  % Force column vector
+  xout = xout(:); 
   vout = vout(:);
-  dz = dz(:);
-  du = 1./dz(:);
+
+  kernel = ones(2, 1) / 2;
+  dx = conv(dx, kernel, 'same');
+  dx = dx(:);
+
+  
+
 end
