@@ -2,7 +2,8 @@ clc; clear; close all;
 RGB = orderedcolors("gem");
 
 %% add utility paths
-addpath("fun\"); addpath("fun\Uoc\");
+addpath("fun\");
+
 %% process OCV data
 file      = 'input\full-cell\CU_qOCP_LGMH1_PAT20251015_NMC1_G5_Channel_9_Wb_1.xlsx';
 %--------------------------------------------------------------------------

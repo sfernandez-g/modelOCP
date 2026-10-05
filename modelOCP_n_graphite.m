@@ -2,7 +2,7 @@ clc; clear; close all;
 RGB = orderedcolors("gem");
 
 %% add utility paths
-addpath("fun\"); addpath("fun\Uoc\");
+addpath("fun\");
 
 %% process OCP data
 file      = 'input\neg\checkUp_LGMH1_PAT20261302_G1_Li_T25_Channel_2_Wb_1.xlsx';
