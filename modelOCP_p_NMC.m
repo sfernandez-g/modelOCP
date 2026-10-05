@@ -266,6 +266,11 @@ legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', 
 ylim(v_range); xlim(sol_range);
 title('MSMR vs. Rough estimate of lithiation')
 drawnow
+% --------------------------------------------------
+for k = 1:length(ocvrel.estimates)  % Change absolut lithiation range to match MSMR
+    ocvrel.estimates(k).theta = ocvrel.theta_min_corr + (1 - ocvrel.estimates(k).Z) .* (ocvrel.theta_max_corr - ocvrel.theta_min_corr);
+end
+plot(ocvrel.estimates(idx).theta, ocvrel.estimates(idx).U, DisplayName='$U_\mathrm{ocp}^\mathrm{avg, corr}$');
 
 %% MSMR model plots
 figure;
@@ -313,12 +318,18 @@ theta_min = model.theta_min;
 model.zToTheta = @(z) z .* (theta_min - theta_max) + theta_max;
 model.thetaToZ = @(theta) (theta - theta_max) ./ (theta_min - theta_max);
 % --------------------------------------------------
-Z_ch  = model.MSMR.charge.Zmod;
-U_ch  = model.MSMR.charge.U;
-Z_dch = model.MSMR.discharge.Zmod;
-U_dch = model.MSMR.discharge.U;
-Z_avg = model.MSMR.average.Zmod;
-U_avg = model.MSMR.average.U;
+% Z_ch  = model.MSMR.charge.Zmod;
+% U_ch  = model.MSMR.charge.U;
+% Z_dch = model.MSMR.discharge.Zmod;
+% U_dch = model.MSMR.discharge.U;
+% Z_avg = model.MSMR.average.Zmod;
+% U_avg = model.MSMR.average.U;
+Z_ch  = model.UocpEstimates(find(string(OCVestimators) == "charge")).theta;
+U_ch  = model.UocpEstimates(find(string(OCVestimators) == "charge")).U;
+Z_dch = model.UocpEstimates(find(string(OCVestimators) == "discharge")).theta;
+U_dch = model.UocpEstimates(find(string(OCVestimators) == "discharge")).U;
+Z_avg = model.UocpEstimates(find(string(OCVestimators) == "diagonalAverage")).theta;
+U_avg = model.UocpEstimates(find(string(OCVestimators) == "diagonalAverage")).U;
 model.UocpCh = @(theta) interp1(Z_ch, U_ch, theta, 'linear', 'extrap');
 model.UocpDch = @(theta) interp1(Z_dch, U_dch, theta, 'linear', 'extrap');
 model.UocpAvg = @(theta) interp1(Z_avg, U_avg, theta, 'linear', 'extrap');
