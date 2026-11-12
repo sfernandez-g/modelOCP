@@ -1,11 +1,12 @@
 clc; clear; close all; 
+repoRoot = fileparts(mfilename('fullpath'));
 RGB = orderedcolors("gem");
 
 %% add utility paths
-addpath("fun\");
+addpath(fullfile(repoRoot, "fun"));
 
 %% process OCV data
-file      = 'input\full-cell\CU_qOCP_LGMH1_PAT20251015_NMC1_G5_Channel_9_Wb_1.xlsx';
+file      = fullfile(repoRoot, 'input', 'full-cell', 'CU_qOCP_LGMH1_PAT20251015_NMC1_G5_Channel_9_Wb_1.xlsx');
 %--------------------------------------------------------------------------
 cellName  = 'LG MH1 PAT full-cell'; 
 %--------------------------------------------------------------------------
@@ -30,25 +31,7 @@ voltChannels = {'MainVolt', 'AuxVolt', 'AuxMinusMain'};
 filtv        = [2.5, 4.2; 3, 4.3; 0, 1.5];
 
 for j = 1:length(voltChannels)
-    cal = processCU(test_data, cfg, voltChannels, j); % test data, processing config, voltChannels
-    %% Estimate OCP
-    cellData.raw = cal; cellData.cal = cal; cellData.name = cellName;
-    % -------------------------------------------------------------------------
-    config.vmin         = cal.minV; config.vmax = cal.maxV; config.datype = 'useAvg';
-    config.daxcorrfiltz = @(Z){0<Z & Z<0.1};                                            % focus on this SOC region
-    config.daxcorrfiltv = @(V){filtv(j, 1)<V & V<filtv(j, 2)};                          % focus on this V region
-    % -------------------------------------------------------------------------
-    OCVresolution = 1e4; % this many points between 0 and 1
-    OCVestimators = {'diagonalAverage'};
-    % -------------------------------------------------------------------------
-    ocvrel        = estimateOCV(cellData, config, OCVresolution, OCVestimators);
-    ocvrel        = addDchChOCV(ocvrel, cellData, "discharge");
-    ocvrel        = addDchChOCV(ocvrel, cellData, "charge");
-    ocvrel.Q      = cal.QAh;
-    % -------------------------------------------------------------------------
-    OCVestimators{end+1} = 'charge';
-    OCVestimators{end+1} = 'discharge';
-    ocvrel.estimates     = ocvrel.estimates(end:-1:1);
+    [cal, ocvrel, OCVestimators] = processOCPCurves(test_data, cfg, voltChannels, j, cellName, filtv(j,:), @(Z) 0 < Z & Z < 0.1, 1e4);
     % -------------------------------------------------------------------------
     figure;
     for k = 1:length(ocvrel.estimates)
@@ -64,19 +47,23 @@ for j = 1:length(voltChannels)
     drawnow
 
     %% Save model for future use
-    model.UocpEstimates = ocvrel.estimates;
-    % ---------------------------------------------
-    Z_ch  = model.UocpEstimates(find(string(OCVestimators) == "charge")).Z;
-    U_ch  = model.UocpEstimates(find(string(OCVestimators) == "charge")).U;
-    Z_dch = model.UocpEstimates(find(string(OCVestimators) == "discharge")).Z;
-    U_dch = model.UocpEstimates(find(string(OCVestimators) == "discharge")).U;
-    Z_avg = model.UocpEstimates(find(string(OCVestimators) == "diagonalAverage")).Z;
-    U_avg = model.UocpEstimates(find(string(OCVestimators) == "diagonalAverage")).U;
-    model.UocvCh = @(theta) interp1(Z_ch, U_ch, theta, 'linear', 'extrap');
-    model.UocvDch = @(theta) interp1(Z_dch, U_dch, theta, 'linear', 'extrap');
-    model.UocvAvg = @(theta) interp1(Z_avg, U_avg, theta, 'linear', 'extrap');
+    % ---- Uocp estimates
+    model.raw = ocvrel.estimates;
+    % ---- LUT
+    model.LUT.Z_ch  = model.raw(find(string(OCVestimators) == "charge")).Z;
+    model.LUT.U_ch  = model.raw(find(string(OCVestimators) == "charge")).U;
+    model.LUT.UocpCh = @(z) linearinterp(model.LUT.Z_ch, model.LUT.U_ch, z);
+
+    model.LUT.Z_dch = model.raw(find(string(OCVestimators) == "discharge")).Z;
+    model.LUT.U_dch = model.raw(find(string(OCVestimators) == "discharge")).U;
+    model.LUT.UocpDch = @(z) linearinterp(model.LUT.Z_dch, model.LUT.U_dch, z);
+
+    model.LUT.Z_avg = model.raw(find(string(OCVestimators) == "diagonalAverage")).Z;
+    model.LUT.U_avg = model.raw(find(string(OCVestimators) == "diagonalAverage")).U;
+    model.LUT.UocpAvg = @(z) linearinterp(model.LUT.Z_avg, model.LUT.U_avg, z);
+    % --------------------------------------------------
     model.Q25 = ocvrel.Q;
 
-    fileName = sprintf('output/Uocv_%s.mat', voltChannels{j});
+    fileName = fullfile(repoRoot, 'output', sprintf('Uocv_%s.mat', voltChannels{j}));
     save(fileName, 'model');
 end

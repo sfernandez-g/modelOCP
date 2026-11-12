@@ -4,6 +4,7 @@
 % test_data = getDataArbin_XLSX(file)
 % test_data = getDataArbin_XLSX(file,step2incrementCounter)
 % test_data = getDataArbin_XLSX(file,step2incrementCounter,save_path)
+% test_data = getDataArbin_XLSX(file,step2incrementCounter,save_path,force_reprocess)
 %
 % -- Input --
 % file                  = path to one Arbin XLSX file. If multiple files
@@ -15,6 +16,7 @@
 %                         reliable (optional).
 % save_path             = directory where the processed MAT file is saved
 %                         (optional; defaults to the XLSX file directory).
+% force_reprocess       = true to ignore any cached MAT file (optional).
 %
 % -- Output --
 % test_data = structure containing the processed test data, including:
@@ -37,7 +39,16 @@
 % from changes in the specified step rather than using the counter
 % provided by the cycler.
 
-function test_data = getDataArbin_XLSX(file, step2incrementCounter, save_path)
+function test_data = getDataArbin_XLSX(file, step2incrementCounter, save_path, forceReprocess)
+
+if nargin < 2, step2incrementCounter = []; end
+if nargin < 4 || isempty(forceReprocess), forceReprocess = false; end
+if islogical(forceReprocess)
+    validateattributes(forceReprocess, {'logical'}, {'scalar'});
+else
+    validateattributes(forceReprocess, {'numeric'}, {'scalar','real','finite','>=',0,'<=',1});
+end
+forceReprocess = logical(forceReprocess);
 
 [filePath, fileBaseName, ~] = fileparts(file);
 if nargin < 3 || isempty(save_path)
@@ -45,14 +56,6 @@ if nargin < 3 || isempty(save_path)
 else
     if ~isfolder(save_path), mkdir(save_path); end
     matFile = fullfile(save_path, fileBaseName + ".mat");
-end
-
-%% --- Check if MAT exists ---
-if exist(matFile, 'file')
-    loadedData = load(matFile, 'test_data');
-    test_data  = loadedData.test_data;
-    fprintf('.mat archive found and loaded: %s\n', matFile);
-    return;
 end
 
 %% --- Process Multiple Excel Files ---
@@ -68,6 +71,24 @@ else
     end
     [~, order] = sort(wbNumbers);
     fileNames = {excelFiles(order).name};
+end
+
+% Reuse the cache only when all source files and processing options match.
+sourceFiles = cellfun(@(name) fullfile(filePath, name), fileNames, 'UniformOutput', false);
+sourceInfo = cellfun(@(sourceFile) dir(sourceFile), sourceFiles);
+sourceMeta = struct('name', sourceFiles(:), ...
+                    'bytes', num2cell([sourceInfo.bytes]'), ...
+                    'datenum', num2cell([sourceInfo.datenum]'));
+if exist(matFile, 'file') && ~forceReprocess
+    loadedData = load(matFile, 'test_data', 'cache_meta');
+    if isfield(loadedData, 'cache_meta') && ...
+            isequaln(loadedData.cache_meta.step2incrementCounter, step2incrementCounter) && ...
+            isequaln(loadedData.cache_meta.sources, sourceMeta)
+        test_data = loadedData.test_data;
+        fprintf('.mat archive found and up to date: %s\n', matFile);
+        return;
+    end
+    fprintf('.mat archive is stale; reprocessing: %s\n', matFile);
 end
 
 %% --- Main Loop ---
@@ -142,7 +163,9 @@ step_ids                = [0; cumsum(diff(step) ~= 0)];
 test_data.step_capacity = cell2mat(accumarray(step_ids + 1, Ah, [], @(x) {cumsum(x)}));
 
 %% --- Save Result ---
-save(matFile, 'test_data');
+cache_meta.step2incrementCounter = step2incrementCounter;
+cache_meta.sources = sourceMeta;
+save(matFile, 'test_data', 'cache_meta');
 fprintf('.mat archive generated and saved: %s\n', matFile);
 
 end

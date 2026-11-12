@@ -24,56 +24,35 @@
 % Physics-Based Methods, Artech House, 2024.         
 
 function yq = linearinterp(x, y, xq)
-  
-    % Initialize
-    x = x(:);    % force column vectors
+
+    validateattributes(x, {'numeric'}, {'vector','real','finite','nonempty'}, mfilename, 'x');
+    validateattributes(y, {'numeric'}, {'vector','real','finite','nonempty'}, mfilename, 'y');
+    validateattributes(xq, {'numeric'}, {'real','finite'}, mfilename, 'xq');
+    if numel(x) ~= numel(y)
+        error('linearinterp:InputSizeMismatch', 'x and y must contain the same number of elements.');
+    end
+    if numel(x) < 2
+        error('linearinterp:InsufficientData', 'x and y must contain at least two samples.');
+    end
+
+    outputSize = size(xq);
+    x = x(:);
     y = y(:);
-    
-    size_original_xq = size(xq);
-    xq = xq(:);
-    yq = zeros(size_original_xq);
-    
-    % Sort x to ensure it is monotonic for interpolation.
-    % (noise may corrupt underlying monotonic function).
-    % Strictly speaking, this alters the function y = f(x),
-    % but the alterations are within the noise.
-    [x, IX] = sort(x);
-    y       = y(IX);
-    
-    % Indicies to three different types of x query points.
-    lo  = xq <= x(1);    % logical indicies to points off the low end
-    hi  = xq >= x(end);  % logical indicies to points off the high end
-    mid = find(x(1) < xq & xq < x(end));  % indicies to mid points
-    
-    % 1. xq < x(1): extrapolate off low end of table
-    if any(lo)
-        dx     = x(2) - x(1);
-        dy     = y(2) - y(1);
-        yq(lo) = (xq(lo)-x(1))*dy/dx + y(1);
+    [x, order] = sort(x);
+    y = y(order);
+
+    % Collapse repeated abscissas by averaging their ordinates so every
+    % interpolation interval has a nonzero width.
+    [xUnique, ~, group] = unique(x);
+    if numel(xUnique) < 2
+        error('linearinterp:InsufficientUniqueData', ...
+            'x must contain at least two distinct values.');
     end
-    
-    % 2. xq > x(end): extrapolate off high end of table
-    if any(hi)
-        dx     = x(end) - x(end-1);
-        dy     = y(end) - y(end-1);
-        yq(hi) = (xq(hi)-x(end))*dy/dx + y(end);
+    if numel(xUnique) < numel(x)
+        y = accumarray(group, y, [], @mean);
+        x = xUnique;
     end
-    
-    % 3. x(1) < xq < x(end): linearly interpolate
-    if any(mid)
-        % Find interval index for each xq
-        % bin(i) = k such that x(k) <= xq(i) < x(k+1)
-        [~, ~, loc] = histcounts(xq(mid), x);
-    
-        % Fix edge case loc = length(x)
-        loc(loc == 0) = 1;
-        loc(loc == numel(x)) = numel(x)-1;
-    
-        x1 = x(loc);
-        x2 = x(loc+1);
-        y1 = y(loc);
-        y2 = y(loc+1);
-    
-        m       = (y2 - y1) ./ (x2 - x1);
-        yq(mid) = y1 + m .* (xq(mid) - x1);
-    end
+
+    yq = interp1(x, y, xq(:), 'linear', 'extrap');
+    yq = reshape(yq, outputSize);
+end

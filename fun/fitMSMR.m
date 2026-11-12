@@ -1,7 +1,7 @@
 % FITMSMR Fit a multi-site multi-reaction (MSMR) model to experimental OCP data.
 %
 % -- Usage --
-% [paramsfin,Zmodfin,Zrelfin,dZmodfin,xj,Uj,dZj,fun] = ...
+% [paramsfin,Zmodfin,Zrelfin,dZmodfin,xj,Uj,dZj,fun,fitInfo] = ...
 %     fitMSMR(config,ocvrel,TdegC,curve,vis,cons)
 %
 % -- Description --
@@ -83,7 +83,27 @@
 % and minimum separation of consecutive U0 values, and any additional
 % constraints supplied through cons.
 
-function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun] = fitMSMR(config, ocvrel, TdegC, curve, vis, cons)
+function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun, fitInfo] = fitMSMR(config, ocvrel, TdegC, curve, vis, cons)
+
+% Optional optimizer settings: config.optimizer.seed, .gaOptions, and
+% .fminconOptions. The options fields accept name/value cell arrays;
+% omitted settings retain the defaults below.
+optimizer = struct('seed', 0, 'gaOptions', {{}}, 'fminconOptions', {{}});
+if isfield(config, 'optimizer')
+    supplied = config.optimizer;
+    fields = fieldnames(supplied);
+    for k = 1:numel(fields)
+        if isfield(optimizer, fields{k})
+            optimizer.(fields{k}) = supplied.(fields{k});
+        end
+    end
+end
+if ~isscalar(optimizer.seed) || ~isfinite(optimizer.seed) || optimizer.seed < 0
+    error('fitMSMR:InvalidSeed', 'config.optimizer.seed must be a finite nonnegative scalar.');
+end
+rngState = rng;
+rngCleanup = onCleanup(@() rng(rngState)); %#ok<NASGU>
+rng(optimizer.seed, 'twister');
 
     J      = length(config.init.U0); % number of MSMR galleries
     indU   = 1:J;                    % indicies to U0    in param vectors
@@ -199,6 +219,9 @@ function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun] = fitMSMR(con
         'ConstraintTolerance', 1e-8, ...
         'InitialPopulationMatrix',paramsToVect(config.init)',...
         'UseParallel', false);
+    if ~isempty(optimizer.gaOptions)
+        optsGA = optimoptions(optsGA, optimizer.gaOptions{:});
+    end
     
     optsFmincon = optimoptions(@fmincon, ...
         'Display', 'iter', ...
@@ -207,13 +230,16 @@ function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun] = fitMSMR(con
         'OptimalityTolerance', 1e-10, ...
         'StepTolerance', 1e-10, ...
         'ConstraintTolerance', 1e-10);
+    if ~isempty(optimizer.fminconOptions)
+        optsFmincon = optimoptions(optsFmincon, optimizer.fminconOptions{:});
+    end
 
     % ------------------------------------------------------- Cost fcn.
     fun = @(x) fitMSMR_costFcn(x, Ulab, TdegC, Zlab, diffzlab, dZlab, weight, indU, indX, indW, 0);
 
     % ------------------------------------------------------- Optimization
     % Global search with GA
-    [xGA, fGA] = ga( ...
+    [xGA, fGA, gaExitflag, gaOutput] = ga( ...
         fun, ...
         length(lb), ...
         A, b, ...
@@ -223,7 +249,7 @@ function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun] = fitMSMR(con
         optsGA);
     % Local refinement with fmincon
     fun = @(x) fitMSMR_costFcn(x, Ulab, TdegC, Zlab, diffzlab, dZlab, weight, indU, indX, indW, vis);
-    [x, fval] = fmincon( ...
+    [x, fval, fminconExitflag, fminconOutput] = fmincon( ...
         fun, ...
         xGA, ...
         A, b, ...
@@ -231,6 +257,15 @@ function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun] = fitMSMR(con
         lb, ub, ...
         [], ...
         optsFmincon);
+
+    fitInfo.seed = optimizer.seed;
+    fitInfo.ga.objective = fGA;
+    fitInfo.ga.exitflag = gaExitflag;
+    fitInfo.ga.output = gaOutput;
+    fitInfo.fmincon.objective = fval;
+    fitInfo.fmincon.exitflag = fminconExitflag;
+    fitInfo.fmincon.output = fminconOutput;
+    fitInfo.success = gaExitflag > 0 && fminconExitflag > 0;
 
     % ------------------------------------------------------- Model
     paramsfin = vectToParams(x, indU, indX, indW);                                        % Unpack parameters to vector

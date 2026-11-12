@@ -1,11 +1,12 @@
 clc; clear; close all; 
+repoRoot = fileparts(mfilename('fullpath'));
 RGB = orderedcolors("gem");
 
 %% add utility paths
-addpath("fun\");
+addpath(fullfile(repoRoot, "fun"));
 
 %% process OCP data
-file      = 'input\pos\checkUp_LGMH1_PAT20261302_NMC3_Li_T25_Channel_16_Wb_1.xlsx';
+file      = fullfile(repoRoot, 'input', 'pos', 'checkUp_LGMH1_PAT20261302_NMC3_Li_T25_Channel_16_Wb_1.xlsx');
 %--------------------------------------------------------------------------
 cellName  = 'LG MH1 PAT half-cell PE'; 
 %--------------------------------------------------------------------------
@@ -13,7 +14,7 @@ v_range   = [3 4.3];
 % -------------------------------------------------------------------------
 sol_range   = [0 1];
 % -------------------------------------------------------------------------
-load("output\theoPracCapPos.mat");
+load(fullfile(repoRoot, "output", "theoPracCapPos.mat"));
 Q_r     = Q_r*1e-3;
 AM_per  = 0.96;          % Rojas 2024
 Q_r_AM  = Q_r*AM_per;
@@ -31,26 +32,7 @@ cfg = struct('name', {'CC_dis','CV_dis','CC_chg','CV_chg'}, ... % test phases
              );
 voltChannels = {'MainVolt'};
 filtv        = [3, 4.3];
-cal = processCU(test_data, cfg, voltChannels, 1); % test data, processing config, voltChannels
-
-%% Estimate OCP
-cellData.raw = cal; cellData.cal = cal; cellData.name = cellName;
-% -------------------------------------------------------------------------
-config.vmin         = cal.minV; config.vmax = cal.maxV; config.datype = 'useAvg';
-config.daxcorrfiltz = @(Z){0<Z & Z<0.1};                                            % focus on this SOC region
-config.daxcorrfiltv = @(V){filtv(1, 1)<V & V<filtv(1, 2)};                          % focus on this V region
-% -------------------------------------------------------------------------
-OCVresolution = 1e4; % this many points between 0 and 1
-OCVestimators = {'diagonalAverage'};
-% -------------------------------------------------------------------------
-ocvrel        = estimateOCV(cellData, config, OCVresolution, OCVestimators);
-ocvrel        = addDchChOCV(ocvrel, cellData, "discharge");
-ocvrel        = addDchChOCV(ocvrel, cellData, "charge");
-ocvrel.Q      = cal.QAh;
-% -------------------------------------------------------------------------
-OCVestimators{end+1} = 'charge';
-OCVestimators{end+1} = 'discharge';
-ocvrel.estimates     = ocvrel.estimates(end:-1:1);
+[cal, ocvrel, OCVestimators] = processOCPCurves(test_data, cfg, voltChannels, 1, cellName, filtv, @(Z) 0 < Z & Z < 0.1, 2e3);
 % -------------------------------------------------------------------------
 figure;
 for k = 1:length(ocvrel.estimates)
@@ -147,11 +129,12 @@ cons.b = b;
 % -------------------------------------------------- Differential curve weight
 config.optw = 1e-2;
 % -------------------------------------------------- Launch MSMR fit
-vis = 1;
+vis = 0;
 MSMR_curves = ["discharge", "charge", "diagonalAverage"];
 for curve = MSMR_curves
-    [params, Zmod, Zrel, dZmod, xj, Uj, dZj, fun] = fitMSMR(config, ocvrel, 25, curve, vis, cons); 
+    [params, Zmod, Zrel, dZmod, xj, Uj, dZj, fun, fitInfo] = fitMSMR(config, ocvrel, 25, curve, vis, cons); 
     ocvrel.MSMR.(curve).params = params;
+    ocvrel.MSMR.(curve).fitInfo = fitInfo;
     ocvrel.MSMR.(curve).Zmod = Zmod;
     ocvrel.MSMR.(curve).Zrel = Zrel;
     ocvrel.MSMR.(curve).dZmod = dZmod;
@@ -247,8 +230,6 @@ for curve = MSMR_curves
     ocvrel.MSMR.(curve).Zmod = ocvrel.MSMR.(curve).Zmod .* (ocvrel.MSMR.(curve).params.thetamax - ocvrel.MSMR.(curve).params.thetamin) + ...
                                ocvrel.MSMR.(curve).params.thetamin;
 end
-ocvrel.theta_max_corr = max(ocvrel.MSMR.average.Zmod);
-ocvrel.theta_min_corr = min(ocvrel.MSMR.average.Zmod);
 % -------------------------------------------------- AM correction
 Q_MSMR      = ocvrel.Q/(ocvrel.MSMR.average.params.thetamax - ocvrel.MSMR.average.params.thetamin);
 AM_per_diff = Q_MSMR/Q_r - AM_per;
@@ -268,7 +249,7 @@ title('MSMR vs. Rough estimate of lithiation')
 drawnow
 % --------------------------------------------------
 for k = 1:length(ocvrel.estimates)  % Change absolut lithiation range to match MSMR
-    ocvrel.estimates(k).theta = ocvrel.theta_min_corr + (1 - ocvrel.estimates(k).Z) .* (ocvrel.theta_max_corr - ocvrel.theta_min_corr);
+    ocvrel.estimates(k).theta = ocvrel.MSMR.average.params.thetamin + (1 - ocvrel.estimates(k).Z) .* (ocvrel.MSMR.average.params.thetamax - ocvrel.MSMR.average.params.thetamin);
 end
 plot(ocvrel.estimates(idx).theta, ocvrel.estimates(idx).U, DisplayName='$U_\mathrm{ocp}^\mathrm{avg, corr}$');
 
@@ -308,34 +289,31 @@ xlim(v_range);
 drawnow
 
 %% Save model for future use
-model.UocpEstimates = ocvrel.estimates;
+% ---- Uocp estimates
+model.raw = ocvrel.estimates;
+% ---- MSMR
 model.MSMR = ocvrel.MSMR;
-% --------------------------------------------------
-model.theta_max = ocvrel.theta_max_corr;                                             
-model.theta_min = ocvrel.theta_min_corr;
-theta_max = model.theta_max;
-theta_min = model.theta_min;
-model.zToTheta = @(z) z .* (theta_min - theta_max) + theta_max;
-model.thetaToZ = @(theta) (theta - theta_max) ./ (theta_min - theta_max);
-% --------------------------------------------------
-% Z_ch  = model.MSMR.charge.Zmod;
-% U_ch  = model.MSMR.charge.U;
-% Z_dch = model.MSMR.discharge.Zmod;
-% U_dch = model.MSMR.discharge.U;
-% Z_avg = model.MSMR.average.Zmod;
-% U_avg = model.MSMR.average.U;
-Z_ch  = model.UocpEstimates(find(string(OCVestimators) == "charge")).theta;
-U_ch  = model.UocpEstimates(find(string(OCVestimators) == "charge")).U;
-Z_dch = model.UocpEstimates(find(string(OCVestimators) == "discharge")).theta;
-U_dch = model.UocpEstimates(find(string(OCVestimators) == "discharge")).U;
-Z_avg = model.UocpEstimates(find(string(OCVestimators) == "diagonalAverage")).theta;
-U_avg = model.UocpEstimates(find(string(OCVestimators) == "diagonalAverage")).U;
-model.UocpCh = @(theta) interp1(Z_ch, U_ch, theta, 'linear', 'extrap');
-model.UocpDch = @(theta) interp1(Z_dch, U_dch, theta, 'linear', 'extrap');
-model.UocpAvg = @(theta) interp1(Z_avg, U_avg, theta, 'linear', 'extrap');
+% ---- LUT
+model.LUT.theta_ch     = model.raw(find(string(OCVestimators) == "charge")).theta;
+model.LUT.thetarel_ch  = (1 - model.raw(find(string(OCVestimators) == "charge")).Z);
+model.LUT.U_ch         = model.raw(find(string(OCVestimators) == "charge")).U;
+model.LUT.UocpCh       = @(theta) linearinterp(model.LUT.theta_ch, model.LUT.U_ch, theta);
+
+model.LUT.theta_dch    = model.raw(find(string(OCVestimators) == "discharge")).theta;
+model.LUT.thetarel_dch = (1 - model.raw(find(string(OCVestimators) == "discharge")).Z);
+model.LUT.U_dch        = model.raw(find(string(OCVestimators) == "discharge")).U;
+model.LUT.UocpDch      = @(theta) linearinterp(model.LUT.theta_dch, model.LUT.U_dch, theta);
+
+model.LUT.theta_avg    = model.raw(find(string(OCVestimators) == "diagonalAverage")).theta;
+model.LUT.thetarel_avg = (1 - model.raw(find(string(OCVestimators) == "diagonalAverage")).Z);
+model.LUT.U_avg        = model.raw(find(string(OCVestimators) == "diagonalAverage")).U;
+model.LUT.UocpAvg      = @(theta) linearinterp(model.LUT.theta_avg, model.LUT.U_avg, theta);
+% ---- fcn
+model.zToTheta = @(z) z .* (model.MSMR.average.params.thetamin - model.MSMR.average.params.thetamax) + model.MSMR.average.params.thetamax;
+model.thetaToZ = @(theta) (theta - model.MSMR.average.params.thetamax) ./ (model.MSMR.average.params.thetamin - model.MSMR.average.params.thetamax);
 % --------------------------------------------------
 model.Q25 = ocvrel.Q;
 model.Qnom = Q_r_AM;
 % --------------------------------------------------
-fileName = sprintf('output/Uocp_p.mat');
+fileName = fullfile(repoRoot, 'output', 'Uocp_p.mat');
 save(fileName, 'model');

@@ -1,4 +1,4 @@
-clc; clear; close all; RGB = orderedcolors("gem");
+clc; clear; close all; repoRoot = fileparts(mfilename('fullpath')); RGB = orderedcolors("gem");
 
 %% Negative electrode invasive-measurements (Graphite, LixC6)
 
@@ -31,7 +31,7 @@ relError                = abs(rhoCC-rhoCC_lit)./rhoCC_lit*100           % Relati
 
 Q_r = QsampleNeg
 
-save('output\theoPracCapNeg.mat', "Q_r", '-mat');
+save(fullfile(repoRoot, 'output', 'theoPracCapNeg.mat'), "Q_r", '-mat');
 
 %% Positive electrode invasive-measurements (NMC811, LiNi0.8Mn0.1Co0.1O2)
 
@@ -64,4 +64,4 @@ relError                = abs(rhoCC-rhoCC_lit)./rhoCC_lit*100           % Relati
 
 Q_r = QsamplePos
 
-save('output\theoPracCapPos.mat', "Q_r", '-mat');
+save(fullfile(repoRoot, 'output', 'theoPracCapPos.mat'), "Q_r", '-mat');

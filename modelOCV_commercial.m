@@ -1,11 +1,12 @@
 clc; clear; close all; 
+repoRoot = fileparts(mfilename('fullpath'));
 RGB = orderedcolors("gem");
 
 %% add utility paths
-addpath("fun\");
+addpath(fullfile(repoRoot, "fun"));
 
 %% process OCV data
-file      = 'input\commercial cell\checkUp_paramMW_LGMH1_T25_Channel_3_Wb_1.xlsx';
+file      = fullfile(repoRoot, 'input', 'commercial cell', 'checkUp_paramMW_LGMH1_T25_Channel_3_Wb_1.xlsx');
 %--------------------------------------------------------------------------
 cellName  = 'LG MH1 commercial cell'; 
 %--------------------------------------------------------------------------
@@ -26,26 +27,7 @@ cfg = struct('name', {'CC_dis','CV_dis','CC_chg','CV_chg'}, ... % test phases
              );
 voltChannels = {'MainVolt'};
 filtv        = [2.5, 4.2];
-cal = processCU(test_data, cfg, voltChannels, 1); % test data, processing config, voltChannels
-
-%% Estimate OCP
-cellData.raw = cal; cellData.cal = cal; cellData.name = cellName;
-% -------------------------------------------------------------------------
-config.vmin         = cal.minV; config.vmax = cal.maxV; config.datype = 'useAvg';
-config.daxcorrfiltz = @(Z){0<Z & Z<0.1};                                            % focus on this SOC region
-config.daxcorrfiltv = @(V){filtv(1)<V & V<filtv(2)};                          % focus on this V region
-% -------------------------------------------------------------------------
-OCVresolution = 1e4; % this many points between 0 and 1
-OCVestimators = {'diagonalAverage'};
-% -------------------------------------------------------------------------
-ocvrel        = estimateOCV(cellData, config, OCVresolution, OCVestimators);
-ocvrel        = addDchChOCV(ocvrel, cellData, "discharge");
-ocvrel        = addDchChOCV(ocvrel, cellData, "charge");
-ocvrel.Q      = cal.QAh;
-% -------------------------------------------------------------------------
-OCVestimators{end+1} = 'charge';
-OCVestimators{end+1} = 'discharge';
-ocvrel.estimates     = ocvrel.estimates(end:-1:1);
+[cal, ocvrel, OCVestimators] = processOCPCurves(test_data, cfg, voltChannels, 1, cellName, filtv, @(Z) 0 < Z & Z < 0.1, 1e4);
 % -------------------------------------------------------------------------
 figure;
 for k = 1:length(ocvrel.estimates)
@@ -74,5 +56,5 @@ model.UocvDch = @(theta) interp1(Z_dch, U_dch, theta, 'linear', 'extrap');
 model.UocvAvg = @(theta) interp1(Z_avg, U_avg, theta, 'linear', 'extrap');
 model.Q25 = ocvrel.Q;
 
-fileName = sprintf('output/Uocv_comCell.mat');
+fileName = fullfile(repoRoot, 'output', 'Uocv_comCell.mat');
 save(fileName, 'model');

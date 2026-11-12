@@ -51,6 +51,35 @@
 
 function cal = processCU(test_data, cfg, voltChannels, voltChannelInd)
 
+if numel(cfg) < 3
+    error('processCU:InvalidConfig', ...
+        'cfg must contain at least three entries (discharge CC, discharge CV, and charge CC).');
+end
+if ~isfield(test_data, 'TC_Counter1')
+    error('processCU:MissingCycleCounter', ...
+        'test_data must contain TC_Counter1. Reprocess the Arbin data with a step counter if needed.');
+end
+requiredVectors = {'step','TC_Counter1','ch_capacity','dch_capacity','i','t','v'};
+vectorLengths = zeros(size(requiredVectors));
+for k = 1:numel(requiredVectors)
+    if ~isfield(test_data, requiredVectors{k})
+        error('processCU:MissingData', 'test_data is missing required field "%s".', requiredVectors{k});
+    end
+    vectorLengths(k) = numel(test_data.(requiredVectors{k}));
+end
+if any(vectorLengths ~= vectorLengths(1))
+    error('processCU:InconsistentDataLengths', ...
+        'Step, counter, capacity, current, time, and voltage vectors must have matching lengths.');
+end
+if ~isstruct(cfg) || ~all(isfield(cfg, {'name','step','counter'}))
+    error('processCU:InvalidConfig', 'Each cfg entry must define name, step, and counter.');
+end
+if ~isscalar(voltChannelInd) || voltChannelInd < 1 || ...
+        voltChannelInd > numel(voltChannels) || fix(voltChannelInd) ~= voltChannelInd
+    error('processCU:InvalidVoltageChannel', ...
+        'voltChannelInd must be an integer index into voltChannels.');
+end
+
 chCap  = test_data.ch_capacity;
 disCap = abs(test_data.dch_capacity);
 
@@ -59,6 +88,12 @@ for k = 1:numel(cfg)
     ind = find(test_data.step == cfg(k).step ...
                & ...
                test_data.TC_Counter1 == cfg(k).counter);
+
+    if numel(ind) < 2
+        error('processCU:MissingStepData', ...
+            'Configured segment "%s" (step %g, counter %g) has fewer than two samples.', ...
+            cfg(k).name, cfg(k).step, cfg(k).counter);
+    end
     
     scripts(k).name  = cfg(k).name;
     scripts(k).ind   = ind;
@@ -70,6 +105,10 @@ end
 % coulombic efficiency
 totDisAh = sum(arrayfun(@(s) s.disAh(end), scripts));
 totChgAh = sum(arrayfun(@(s) s.chgAh(end), scripts));
+if ~isfinite(totDisAh) || ~isfinite(totChgAh) || totChgAh <= 0
+    error('processCU:InvalidCapacity', ...
+        'Selected segments must produce finite discharge capacity and positive charge capacity.');
+end
 eta25    = min([totDisAh / totChgAh, 1]);
 if eta25 == 0; eta25 = 1; end
 
@@ -79,6 +118,10 @@ end
 
 % capacity
 Q25 = scripts(1).disAh(end) + scripts(2).disAh(end) - scripts(1).chgAh(end) - scripts(2).chgAh(end);
+if ~isfinite(Q25) || Q25 <= 0
+    error('processCU:InvalidReferenceCapacity', ...
+        'Calculated reference capacity Q25 must be finite and positive (got %g Ah).', Q25);
+end
 
 switch voltChannels{voltChannelInd}
   case 'MainVolt'
