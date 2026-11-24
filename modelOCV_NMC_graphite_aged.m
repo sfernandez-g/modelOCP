@@ -1,14 +1,19 @@
-clc; clear; close all; 
+clc; clear; close all;
 repoRoot = fileparts(mfilename('fullpath'));
 RGB = orderedcolors("gem");
+saveModel = false; % Set true to explicitly export the processed model.
+if saveModel && ~isfolder(fullfile(repoRoot, 'output'))
+    mkdir(fullfile(repoRoot, 'output'));
+end
 
 %% add utility paths
 addpath(fullfile(repoRoot, "fun"));
 
+
 %% process OCV data
 file      = fullfile(repoRoot, 'input', 'full-cell', 'qOCV_LGMH1_PAT_Full-Cell_SOHcheck3_Ch_1_Wb_1.xlsx');
 %--------------------------------------------------------------------------
-cellName  = 'LG MH1 PAT full-cell'; 
+cellName  = 'LG MH1 PAT full-cell';
 %--------------------------------------------------------------------------
 v_range   = [2.5 4.2];
 % -------------------------------------------------------------------------
@@ -16,12 +21,12 @@ sol_range   = [0 1];
 % -------------------------------------------------------------------------
 test_data = getDataArbin_XLSX(file, 7); % filename, step where TC increments
 % -------------------------------------------------------------------------
-figure;
+figure('Name', [cellName, ': measured voltage'], 'NumberTitle', 'off');
 plot(test_data.t./3600, test_data.v, DisplayName='Voltage'); hold on;
 plot(test_data.t./3600, test_data.Aux_V1, DisplayName='AuxV');
-plot(test_data.t./3600, test_data.Aux_V1+test_data.v, DisplayName='AuxV - Voltage');
-pptFormatMultiplePlots('Times New Roman')
+plot(test_data.t./3600, test_data.Aux_V1+test_data.v, DisplayName='AuxV + Voltage');
 xlabel('Time (h)'); ylabel('Voltage (V)'); legend(Location="best");
+thesisFormat;
 % -------------------------------------------------------------------------
 cfg = struct('name', {'CC_dis','CV_dis','CC_chg','CV_chg'}, ... % test phases
              'step', {5, 6, 3, 4}, ...                          % step values of phases for processing
@@ -33,20 +38,18 @@ filtv        = [2.5, 4.2; 0, 1.5; 3, 4.3];
 for j = 1:length(voltChannels)
     [cal, ocvrel, OCVestimators] = processOCPCurves(test_data, cfg, voltChannels, j, cellName, filtv(j,:), @(Z) 0 < Z & Z < 0.1, 1e4);
     % -------------------------------------------------------------------------
-    figure;
+    figure('Name', sprintf('%s: %s versus SOC', cellName, voltChannels{j}), 'NumberTitle', 'off');
     for k = 1:length(ocvrel.estimates)
         plot(ocvrel.estimates(k).Z, ocvrel.estimates(k).U); hold on
     end
-    pptFormatMultiplePlots('Times New Roman')
-    xlabel('SOC $z$', Interpreter='latex'); 
+    xlabel('SOC $z$', Interpreter='latex');
     ylabel('Voltage or Potential vs. Li (V)');
-    legend('$U^\mathrm{chg}$', '$U^\mathrm{dch}$', '$U^\mathrm{avg}$', Location='best'); 
-    legend(Interpreter="latex", FontName='Times New Roman', FontSize=16, Box='off', Location='best', IconColumnWidth=15)
+    legend('$U^\mathrm{dch}$', '$U^\mathrm{chg}$', '$U^\mathrm{avg}$', Location='best');
     xlim(sol_range);
-    title('OCP vs. Relative degree of lithiation');
+    thesisFormat;
     drawnow
 
-    %% Save model for future use
+    %% Assemble the model; optional export
     % ---- Uocp estimates
     model.raw = ocvrel.estimates;
    % ---- LUT
@@ -64,6 +67,8 @@ for j = 1:length(voltChannels)
     % --------------------------------------------------
     model.Q25 = ocvrel.Q;
 
-fileName = fullfile(repoRoot, 'output', sprintf('Uocv_aged_%s.mat', voltChannels{j}));
-    save(fileName, 'model');
+    fileName = fullfile(repoRoot, 'output', sprintf('Uocv_aged_%s.mat', voltChannels{j}));
+    if saveModel
+        save(fileName, 'model');
+    end
 end

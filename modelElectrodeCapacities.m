@@ -17,7 +17,7 @@ m_coating               = m_doubleSideCoatingCC - m_singleCoatingCC;    % x = 2x
 m_CC                    = m_singleCoatingCC - m_coating;                % y [g]
 
 % practical capacity
-QsampleNeg              = m_coating*q_th;                               % Sample capacity [Ah]
+QsampleNeg              = m_coating*q_th;                               % Sample capacity [mAh]
 
 % current collector density validation (Cu "copper")
 L_singleCoatingCC       = 0.09588;                                      % x + y [mm]
@@ -31,7 +31,7 @@ relError                = abs(rhoCC-rhoCC_lit)./rhoCC_lit*100           % Relati
 
 Q_r = QsampleNeg
 
-save(fullfile(repoRoot, 'output', 'theoPracCapNeg.mat'), "Q_r", '-mat');
+Q_r_negative_mAh = Q_r; % Retain the result without writing a file.
 
 %% Positive electrode invasive-measurements (NMC811, LiNi0.8Mn0.1Co0.1O2)
 
@@ -50,9 +50,9 @@ m_coating               = m_doubleSideCoatingCC - m_singleCoatingCC;    % x = 2x
 m_CC                    = m_singleCoatingCC - m_coating;                % y [g]
 
 % practical capacity
-QsamplePos              = m_coating*q_th;                               % Sample capacity [Ah]
+QsamplePos              = m_coating*q_th;                               % Sample capacity [mAh]
 
-% current collector density (Cu "copper")
+% current collector density diagnostic (assumed aluminum)
 L_singleCoatingCC       = 0.08400;                                      % x+y [mm]
 L_doubleSideCoatingCC   = 0.14650;                                      % 2x + y [mm]
 L_coating               = L_doubleSideCoatingCC - L_singleCoatingCC;    % x = 2x+y - (x+y) [mm] 
@@ -64,4 +64,4 @@ relError                = abs(rhoCC-rhoCC_lit)./rhoCC_lit*100           % Relati
 
 Q_r = QsamplePos
 
-save(fullfile(repoRoot, 'output', 'theoPracCapPos.mat'), "Q_r", '-mat');
+Q_r_positive_mAh = Q_r; % Retain the result without writing a file.

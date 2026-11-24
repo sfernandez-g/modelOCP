@@ -66,6 +66,9 @@ for k = 1:numel(requiredVectors)
         error('processCU:MissingData', 'test_data is missing required field "%s".', requiredVectors{k});
     end
     vectorLengths(k) = numel(test_data.(requiredVectors{k}));
+    validateattributes(test_data.(requiredVectors{k}), {'numeric'}, ...
+        {'vector', 'real', 'finite', 'nonempty'}, mfilename, requiredVectors{k});
+    test_data.(requiredVectors{k}) = test_data.(requiredVectors{k})(:);
 end
 if any(vectorLengths ~= vectorLengths(1))
     error('processCU:InconsistentDataLengths', ...
@@ -78,6 +81,18 @@ if ~isscalar(voltChannelInd) || voltChannelInd < 1 || ...
         voltChannelInd > numel(voltChannels) || fix(voltChannelInd) ~= voltChannelInd
     error('processCU:InvalidVoltageChannel', ...
         'voltChannelInd must be an integer index into voltChannels.');
+end
+supportedChannels = {'MainVolt', 'AuxVolt', 'AuxMinusMain', 'AuxPlusMain'};
+if ~ismember(voltChannels{voltChannelInd}, supportedChannels)
+    error('processCU:InvalidVoltageChannel', 'Unknown voltage channel: %s.', voltChannels{voltChannelInd});
+end
+if ~strcmp(voltChannels{voltChannelInd}, 'MainVolt')
+    if ~isfield(test_data, 'Aux_V1')
+        error('processCU:MissingAuxVoltage', 'Selected voltage channel requires Aux_V1.');
+    end
+    validateattributes(test_data.Aux_V1, {'numeric'}, ...
+        {'vector', 'real', 'finite', 'numel', vectorLengths(1)});
+    test_data.Aux_V1 = test_data.Aux_V1(:);
 end
 
 chCap  = test_data.ch_capacity;

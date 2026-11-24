@@ -52,7 +52,7 @@
 %       Initial gallery fractions. sum(X) = 1.
 %
 %   w : vector
-%       Initial MSMR width parameters [V].
+%       Initial MSMR width parameters [-], in the F*(U-U0)/(R*T*w) convention.
 %
 %   diag : struct
 %       Diagnostic information used to construct the initialization.
@@ -76,9 +76,7 @@ function [U0, X, w, diag] = guessMSMR(ocvrel, varargin)
         nameValueStart = 2;
     end
 
-    if ~isscalar(TdegC) || ~isnumeric(TdegC)
-        error('TdegC must be a numeric scalar.');
-    end
+    validateattributes(TdegC, {'numeric'}, {'scalar', 'real', 'finite', '>', -273.15});
 
     %% Parse optional name-value arguments
 
@@ -225,6 +223,8 @@ function [U0, X, w, diag] = guessMSMR(ocvrel, varargin)
     % Sort boundaries by composition.
     Zvalleys = sort(Zvalleys);
     % Gallery fractions.
+    % Z0 is the measured SOC (1-theta), not lithiation. Its ascending
+    % intervals already match the ascending-potential gallery ordering.
     X = diff([min(Z0); Zvalleys; max(Z0)]);
     % Normalize to ensure sum(X)=1.
     X = X / sum(X);

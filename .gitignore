@@ -1,0 +1,20 @@
+# Raw workbooks and derived import caches remain local.
+/input/*
+!/input/reference/
+/input/reference/*
+!/input/reference/README.md
+!/input/reference/ocpReferences.mat
+!/input/reference/theoPracCapNeg.mat
+!/input/reference/theoPracCapPos.mat
+.cache/
+.build/
+/output/
+*.asv
+*.m~
+*.autosave
+*.mex*
+matlab_crash_dump*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

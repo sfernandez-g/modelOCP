@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "Cite this implementation together with the BMS3 and Lu methodology sources identified in THIRD_PARTY_NOTICES.md. Report the source revision and fitting settings."
+title: "modelOCP: half-cell OCP processing and MSMR electrode fitting"
+type: software
+authors:
+  - family-names: "Fernandez Gonzalez"
+    given-names: "Sergio"
+repository-code: "https://github.com/sfernandez-g/modelOCP"
+license: CC-BY-SA-4.0

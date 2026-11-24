@@ -62,16 +62,16 @@
 % Zrelfin  = MSMR composition transformed to the relative experimental
 %             lithiation range.
 %
-% dZmodfin = Differential MSMR composition dZ/dU.
+% dZmodfin = Positive differential magnitude -dZ/dU [1/V].
 %
 % xj       = Composition contribution of each MSMR gallery.
 %
 % Uj       = Equilibrium potential associated with each gallery contribution.
 %
-% dZj      = Differential contribution of each MSMR gallery.
+% dZj      = Positive gallery differential magnitudes divided by F/(R*T).
 %
 % fun      = Function handle that calculates the OCP voltage corresponding
-%            to a specified relative composition.
+%            to a specified absolute composition (same axis as Zmodfin).
 %
 % -- Optimization --
 % The objective function minimizes the combined squared residuals between
@@ -98,9 +98,8 @@ if isfield(config, 'optimizer')
         end
     end
 end
-if ~isscalar(optimizer.seed) || ~isfinite(optimizer.seed) || optimizer.seed < 0
-    error('fitMSMR:InvalidSeed', 'config.optimizer.seed must be a finite nonnegative scalar.');
-end
+validateattributes(optimizer.seed, {'numeric'}, ...
+    {'scalar', 'real', 'finite', 'integer', '>=', 0, '<=', 2^32-1});
 rngState = rng;
 rngCleanup = onCleanup(@() rng(rngState)); %#ok<NASGU>
 rng(optimizer.seed, 'twister');
@@ -113,11 +112,20 @@ rng(optimizer.seed, 'twister');
     Usep   = 0.001;                  % Minimum voltage separation between peaks (1mV)
     
     % ------------------------------------------------------- Find the OCP vector to fit MSMR
-    idx      = find(string({ocvrel.estimates.name}) == curve);                               
+    idx      = find(string({ocvrel.estimates.name}) == curve);
+    if numel(idx) ~= 1
+        error('fitMSMR:CurveSelection', 'Exactly one estimate named %s is required.', curve);
+    end
     Ulab     = ocvrel.estimates(idx).U;                        % OCP vector derived from lab data [V]
     Zlab     = 1-ocvrel.estimates(idx).Z;                      % SOC vector derived from lab data [-] (Relative lithiation)
     dZlab    = abs(ocvrel.estimates(idx).dZ);                  % Absolute differential capacity
     diffzlab = max(Zlab) - min(Zlab);                          % Relative lithiation range
+    validateattributes(Ulab, {'numeric'}, {'vector', 'real', 'finite', 'nonempty'});
+    validateattributes(Zlab, {'numeric'}, {'vector', 'real', 'finite', 'numel', numel(Ulab)});
+    validateattributes(dZlab, {'numeric'}, {'vector', 'real', 'finite', 'numel', numel(Ulab)});
+    if diffzlab <= 0 || config.init.thetamax <= config.init.thetamin
+        error('fitMSMR:InvalidInterval', 'Measured and initial composition intervals must be positive.');
+    end
 
     % -------------------------------------------------------
     [Zmod_ini, dZmod_ini] = compositionMSMR(Ulab, config.init, TdegC);                                   % Evaluate MSMR
@@ -127,8 +135,9 @@ rng(optimizer.seed, 'twister');
     
     % -------------------------------------------------------
     if vis == 1
+        % Resolve the shared formatter even when called directly from fun/.
         persistent fig;
-        fig = figure; clf(fig);
+        fig = figure('Name', sprintf('MSMR fitting progress: %s', curve), 'NumberTitle', 'off');
         subplot(2,2,1)
             line_OcpLab = plot(Zlab,Ulab,'-', DisplayName='Lab'); hold on;
             line_OcpIni = plot(Zmod_ini, Ulab, 'r:', DisplayName='Ini');
@@ -141,13 +150,13 @@ rng(optimizer.seed, 'twister');
             line_dOcpIni = plot(dZmod_ini./max(dZmod_ini), Ulab, 'r:', DisplayName='Ini');
             line_dOcpMod = plot(NaN,NaN,'k:', DisplayName='Model');
             ylim([min(config.init.U0)-0.25 max(config.init.U0)+0.25])
-            xlabel('Normalized $d\tilde{\theta}_\mathrm{s}/dU$', 'Interpreter','latex');
+            xlabel('Normalized $|\mathrm{d}\tilde{\theta}/\mathrm{d}U|$', 'Interpreter','latex');
         subplot(2,2,3)
             line_dthetaLab = plot(Zlab,dZlab./max(dZlab),'-', DisplayName='Lab'); hold on;
             line_dthetaIni = plot(Zmod_ini, dZmod_ini./max(dZmod_ini), 'r:', DisplayName='Ini');
             line_dthetaMod = plot(NaN,NaN,'k:', DisplayName='Model');
-            xlabel('Relative Composition, $\tilde{\theta}_\mathrm{s}$', 'Interpreter','latex');
-            ylabel('Normalized $d\tilde{\theta}_\mathrm{s}/dU$', 'Interpreter','latex');
+            xlabel('Relative Composition, $\tilde{\theta}$', 'Interpreter','latex');
+            ylabel('Normalized $|\mathrm{d}\tilde{\theta}/\mathrm{d}U|$', 'Interpreter','latex');
             xlim([0 1])
         
         ax4 = subplot(2,2,4); pos = get(ax4, 'Position'); delete(ax4)
@@ -174,11 +183,12 @@ rng(optimizer.seed, 'twister');
         end
         set(ax(1), 'XTickLabel', [])
         set(ax(2), 'XTickLabel', [])
+        thesisFormat([], [], fig);
     end
     
     % ------------------------------------------------------- Array flips
     function x = paramsToVect(params)
-        x = [params.U0; params.X; params.w; params.thetamin; params.thetamax];
+        x = [params.U0(:); params.X(:); params.w(:); params.thetamin; params.thetamax];
     end
     function params = vectToParams(x, indU, indX, indW)
         x = x(:);
@@ -208,6 +218,11 @@ rng(optimizer.seed, 'twister');
     b = -Usep * ones(J-1, 1);
     A = [A; cons.A];
     b = [b; cons.b];
+    % Keep the normalization denominator positive for every feasible candidate.
+    intervalConstraint = zeros(1, length(lb));
+    intervalConstraint(end-1:end) = [1, -1];
+    A = [A; intervalConstraint];
+    b = [b; -1e-8]; % Numerical lower bound on the dimensionless interval span.
 
     % ------------------------------------------------------- Optimizer opts.
     optsGA = optimoptions(@ga, ...
@@ -265,7 +280,12 @@ rng(optimizer.seed, 'twister');
     fitInfo.fmincon.objective = fval;
     fitInfo.fmincon.exitflag = fminconExitflag;
     fitInfo.fmincon.output = fminconOutput;
-    fitInfo.success = gaExitflag > 0 && fminconExitflag > 0;
+    fitInfo.maxConstraintViolation = max([0; A*x(:)-b(:); ...
+        abs(Aeq*x(:)-beq); lb(:)-x(:); x(:)-ub(:)]);
+    % GA may reach its budget before local refinement converges successfully.
+    fitInfo.success = fminconExitflag > 0 && isfinite(fval) ...
+        && fitInfo.maxConstraintViolation <= optsFmincon.ConstraintTolerance;
+    fitInfo.gaConverged = gaExitflag > 0;
 
     % ------------------------------------------------------- Model
     paramsfin = vectToParams(x, indU, indX, indW);                                        % Unpack parameters to vector
@@ -276,6 +296,10 @@ rng(optimizer.seed, 'twister');
 
     function y = fitMSMR_costFcn(x, Umod, TdegC, Zlab, diffzlab, dZlab, weight, indU, indX, indW, vis)
         params        = vectToParams(x, indU, indX, indW);                            % Unpack parameter vector
+        if params.thetamax <= params.thetamin || any(params.w <= 0) || any(params.X <= 0)
+            y = realmax('double')/1e100;
+            return
+        end
         [Zmod, dZmod] = compositionMSMR(Umod, params, TdegC);                         % Evaluate MSMR  
         Zmod          = (Zmod - params.thetamin)/(params.thetamax - params.thetamin); % From absolute to relative
         Zmod          = min(Zlab) + Zmod*diffzlab;

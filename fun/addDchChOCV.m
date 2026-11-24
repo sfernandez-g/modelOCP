@@ -24,6 +24,9 @@
 
 function ocvrel = addDchChOCV(ocvrel, cellData, name)
 
+name = string(name);
+validateattributes(name, {'string'}, {'scalar'});
+mustBeMember(name, ["discharge", "charge"]);
 if name == "discharge"
     mini_name = "dis";
 elseif name == "charge"

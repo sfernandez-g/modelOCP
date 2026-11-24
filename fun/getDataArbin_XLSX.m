@@ -15,7 +15,7 @@
 %                         when the TC_Counter provided by Arbin is not
 %                         reliable (optional).
 % save_path             = directory where the processed MAT file is saved
-%                         (optional; defaults to the XLSX file directory).
+%                         (optional; defaults to .cache/ beside the XLSX files).
 % force_reprocess       = true to ignore any cached MAT file (optional).
 %
 % -- Output --
@@ -42,6 +42,9 @@
 function test_data = getDataArbin_XLSX(file, step2incrementCounter, save_path, forceReprocess)
 
 if nargin < 2, step2incrementCounter = []; end
+if ~isempty(step2incrementCounter)
+    validateattributes(step2incrementCounter, {'numeric'}, {'scalar', 'real', 'finite', 'integer', 'nonnegative'});
+end
 if nargin < 4 || isempty(forceReprocess), forceReprocess = false; end
 if islogical(forceReprocess)
     validateattributes(forceReprocess, {'logical'}, {'scalar'});
@@ -52,11 +55,9 @@ forceReprocess = logical(forceReprocess);
 
 [filePath, fileBaseName, ~] = fileparts(file);
 if nargin < 3 || isempty(save_path)
-    matFile = fullfile(filePath, fileBaseName + ".mat");
-else
-    if ~isfolder(save_path), mkdir(save_path); end
-    matFile = fullfile(save_path, fileBaseName + ".mat");
+    save_path = fullfile(filePath, '.cache');
 end
+matFile = fullfile(save_path, fileBaseName + ".mat");
 
 %% --- Process Multiple Excel Files ---
 baseName = regexprep(fileBaseName, '_Wb_\d+$', '');
@@ -75,13 +76,19 @@ end
 
 % Reuse the cache only when all source files and processing options match.
 sourceFiles = cellfun(@(name) fullfile(filePath, name), fileNames, 'UniformOutput', false);
+if any(~cellfun(@isfile, sourceFiles))
+    error('getDataArbin_XLSX:MissingSource', 'Source workbook not found: %s', file);
+end
 sourceInfo = cellfun(@(sourceFile) dir(sourceFile), sourceFiles);
 sourceMeta = struct('name', sourceFiles(:), ...
                     'bytes', num2cell([sourceInfo.bytes]'), ...
                     'datenum', num2cell([sourceInfo.datenum]'));
 if exist(matFile, 'file') && ~forceReprocess
     loadedData = load(matFile, 'test_data', 'cache_meta');
-    if isfield(loadedData, 'cache_meta') && ...
+    if isfield(loadedData, 'test_data') && isfield(loadedData, 'cache_meta') ...
+            && isstruct(loadedData.cache_meta) ...
+            && all(isfield(loadedData.cache_meta, {'schemaVersion', 'step2incrementCounter', 'sources'})) ...
+            && loadedData.cache_meta.schemaVersion == 1 && ...
             isequaln(loadedData.cache_meta.step2incrementCounter, step2incrementCounter) && ...
             isequaln(loadedData.cache_meta.sources, sourceMeta)
         test_data = loadedData.test_data;
@@ -93,7 +100,7 @@ end
 
 %% --- Main Loop ---
 test_data = struct();
-test_data.raw = table();
+rawTables = cell(numel(fileNames), 1);
 for k = 1:length(fileNames)
     file_k = fullfile(filePath, fileNames{k});
     sheets = sheetnames(file_k);
@@ -103,7 +110,7 @@ for k = 1:length(fileNames)
     raw_meas = readtable(file_k, "Sheet", sheets(end), "VariableNamingRule", "preserve");
     
     % Merge raw tables
-    test_data.raw = [test_data.raw; raw_meas];
+    rawTables{k} = raw_meas;
     
     % Extract Metadata only once (from the first file)
     if k == 1
@@ -116,6 +123,7 @@ for k = 1:length(fileNames)
         test_data.Capacity_Nominal = raw_info{h, "Var10"};
     end
 end
+test_data.raw = vertcat(rawTables{:});
 
 %% --- Vectorized Data Extraction ---
 % Assigning to short variables for calculation
@@ -123,6 +131,12 @@ t    = test_data.raw.("Test Time (s)");
 i    = test_data.raw.("Current (A)");
 v    = test_data.raw.("Voltage (V)");
 step = test_data.raw.("Step Index");
+validateattributes(t, {'numeric'}, {'column', 'real', 'finite', 'nonempty'});
+validateattributes(i, {'numeric'}, {'column', 'real', 'finite', 'numel', numel(t)});
+if any(diff(t) < 0)
+    error('getDataArbin_XLSX:TimeReset', ...
+        'Test time decreases across samples or workbook boundaries; resolve the time reference before integration.');
+end
 
 test_data.t    = t;
 test_data.i    = i;
@@ -163,6 +177,8 @@ step_ids                = [0; cumsum(diff(step) ~= 0)];
 test_data.step_capacity = cell2mat(accumarray(step_ids + 1, Ah, [], @(x) {cumsum(x)}));
 
 %% --- Save Result ---
+if ~isfolder(save_path), mkdir(save_path); end
+cache_meta.schemaVersion = 1;
 cache_meta.step2incrementCounter = step2incrementCounter;
 cache_meta.sources = sourceMeta;
 save(matFile, 'test_data', 'cache_meta');

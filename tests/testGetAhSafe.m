@@ -2,7 +2,8 @@ function tests = testGetAhSafe
 tests = functiontests(localfunctions);
 end
 
-function setupOnce(~)
+function setupOnce(testCase)
+testCase.TestData.originalPath = path;
 funDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'fun');
 addpath(funDir);
 end
@@ -14,4 +15,8 @@ end
 
 function testemptySelectionReturnsZero(testCase)
 verifyEqual(testCase, getAhSafe([0; 1], []), 0);
+end
+
+function teardownOnce(testCase)
+path(testCase.TestData.originalPath);
 end

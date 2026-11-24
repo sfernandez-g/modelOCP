@@ -28,22 +28,26 @@
 %
 % -- Outputs --
 % Z      = Total electrode composition as a function of potential [-].
-% dZ     = Differential electrode composition dZ/dU [1/V].
-% xj     = Occupation of each MSMR gallery as a function of potential.
-% Uj     = Potential corresponding to the occupation of each gallery [V].
-% dZj    = Differential contribution of each MSMR gallery to dZ/dU [1/V].
+% dZ     = Positive differential magnitude -dZ/dU [1/V], N-by-1.
+% xj     = Occupation of each MSMR gallery, J-by-N, dimensionless.
+% Uj     = Supplied potentials repeated for each gallery, J-by-N [V].
+% dZj    = Positive gallery derivative magnitudes divided by f=F/(R*T),
+%          J-by-N. Multiply by f to obtain |dx_j/dU| [1/V].
 %
 % -- Model --
 % The total composition is calculated as:
 %   Z(U) = sum_j x_j(U)
 % where x_j is the contribution of gallery j.
-% The differential composition is:
+% The signed differential composition is:
 %   dZ/dU = sum_j dx_j/dU
+% The returned dZ is its negative, i.e. the positive magnitude.
 % The calculation assumes positive gallery fractions X and positive
 % transition-width parameters w.
 
 function [Z, dZ, xj, Uj, dZj] = compositionMSMR(Uvect, params, TdegC)
-  
+
+validateattributes(Uvect, {'numeric'}, {'vector', 'real', 'finite', 'nonempty'});
+validateattributes(TdegC, {'numeric'}, {'scalar', 'real', 'finite', '>', -273.15});
 % Physical constants
 R = 8.3144598;       % Molar gas constant [J/(mol K)]
 F = 96485.3329;      % Faraday constant [C/mol]
@@ -52,6 +56,12 @@ F = 96485.3329;      % Faraday constant [C/mol]
 U0 = params.U0(:);
 X  = params.X(:);
 w  = params.w(:);
+validateattributes(U0, {'numeric'}, {'vector', 'real', 'finite', 'nonempty'});
+validateattributes(X, {'numeric'}, {'vector', 'real', 'finite', 'positive'});
+validateattributes(w, {'numeric'}, {'vector', 'real', 'finite', 'positive'});
+if numel(U0) ~= numel(X) || numel(U0) ~= numel(w)
+    error('compositionMSMR:ParameterSize', 'U0, X, and w must have matching lengths.');
+end
 
 % Temperature-dependent factor
 f = F/R/(TdegC + 273.15);
@@ -59,21 +69,21 @@ f = F/R/(TdegC + 273.15);
 % Ensure potential is a row vector
 Uvect = Uvect(:).';
 
-% Gallery occupation
-gj = exp(f*(Uvect - U0)./w);
-xj = X./(1 + gj);
-
-% Potential corresponding to each gallery occupation
-Uj = U0 + w./f .* log((X - xj)./xj);
+% A sign-aware logistic avoids overflow and cancellation in saturated sites.
+argument = f*(Uvect - U0)./w;
+tail = exp(-abs(argument));
+occupation = tail./(1 + tail);
+negative = argument < 0;
+occupation(negative) = 1./(1 + tail(negative));
+xj = X.*occupation;
+% These are exactly the input potentials, even where occupation rounds to 0/1.
+Uj = repmat(Uvect, numel(U0), 1);
 
 % Total composition
 Z = sum(xj,1);
 
 % Differential contribution of each gallery
-dZj = (X./w) .* gj ./ (1 + gj).^2;
-
-% Numerical limit when gj -> Inf
-dZj(isnan(dZj)) = 0;
+dZj = (X./w) .* tail ./ (1 + tail).^2;
 
 % Total differential composition
 dZ = f*sum(dZj,1);

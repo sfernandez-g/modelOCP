@@ -3,7 +3,8 @@ function tests = testLinearinterp
 tests = functiontests(localfunctions);
 end
 
-function setupOnce(~)
+function setupOnce(testCase)
+testCase.TestData.originalPath = path;
 funDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'fun');
 addpath(funDir);
 end
@@ -32,4 +33,8 @@ end
 function testrejectsMismatchedVectors(testCase)
 verifyError(testCase, @() linearinterp([0; 1], 1, 0.5), ...
     'linearinterp:InputSizeMismatch');
+end
+
+function teardownOnce(testCase)
+path(testCase.TestData.originalPath);
 end

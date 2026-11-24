@@ -38,17 +38,20 @@ function yq = linearinterp(x, y, xq)
     outputSize = size(xq);
     x = x(:);
     y = y(:);
-    [x, order] = sort(x);
-    y = y(order);
-
-    % Collapse repeated abscissas by averaging their ordinates so every
-    % interpolation interval has a nonzero width.
-    [xUnique, ~, group] = unique(x);
-    if numel(xUnique) < 2
-        error('linearinterp:InsufficientUniqueData', ...
-            'x must contain at least two distinct values.');
+    % Already increasing data need no sorting or duplicate grouping.
+    if any(x(2:end) < x(1:end-1))
+        [x, order] = sort(x);
+        y = y(order);
     end
-    if numel(xUnique) < numel(x)
+
+    % After sorting, repeated abscissas are adjacent. Average their ordinates
+    % only when needed so every interpolation interval has a nonzero width.
+    if any(x(2:end) == x(1:end-1))
+        [xUnique, ~, group] = unique(x);
+        if numel(xUnique) < 2
+            error('linearinterp:InsufficientUniqueData', ...
+                'x must contain at least two distinct values.');
+        end
         y = accumarray(group, y, [], @mean);
         x = xUnique;
     end
