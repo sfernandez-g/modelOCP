@@ -1,73 +1,80 @@
 # modelOCP
 
-MATLAB processing of Arbin battery measurements, diagonal-average OCP/OCV
-estimation, and multi-site multi-reaction (MSMR) electrode fitting. The methods
-and their relation to the article are documented in the companion modelOCV
-repository's `doc/REPRODUCIBILITY.md`.
+MATLAB tools for processing Arbin half-cell measurements, estimating electrode
+open-circuit potential (OCP) by diagonal averaging, and fitting a multi-site
+multi-reaction (MSMR) model. The examples configure graphite and NMC811 electrodes.
 
 ## Requirements
 
-MATLAB R2023b or newer; Optimization Toolbox (`fmincon`), Global Optimization
-Toolbox (`ga`), and Signal Processing Toolbox (`findpeaks`, `xcorr`). The numerical
-unit tests do not need the experimental workbooks; the small synthetic fitting
-test requires the optimization toolboxes. Preparation is verified on R2024b.
+- MATLAB R2023b or later.
+- Optimization Toolbox (`fmincon`).
+- Global Optimization Toolbox (`ga`).
+- Signal Processing Toolbox (`findpeaks`, `xcorr`).
 
-## Run the workflows
+## Usage
+
+From the repository folder, run either example:
 
 ```matlab
-setupModelOCP()
 run('example_modelOCPelectrode_graphite.m')
-% or: run('example_modelOCPelectrode_NMC.m')
+% Alternatively:
+run('example_modelOCPelectrode_NMC.m')
 ```
 
-The half-cell examples require the original experimental XLSX workbooks at the
-configured `input/neg/` and `input/pos/` paths. Workbooks are not part of the public
-source distribution. The small capacity references are in `input/reference/`.
-Paths and figure formatting are local to this repository; no ECS 2027 directory
-or externally installed `thesisFormat` is required. Do not recursively add this
-repository and modelOCV together: call the appropriate setup when switching.
+Each script adds `fun/` to the MATLAB path and defines the experimental inputs,
+temperature, fitting parameters, and figure settings. Update `settings.inputFile`
+to point to your Arbin XLSX workbook. The original experimental workbooks are
+not distributed; the examples require them or compatible replacement data.
+Review the step/cycle configuration in `fun/modelOCPelectrode.m` when using a
+different measurement protocol. Use this repository's helper functions when
+switching between this project and the companion modelOCV repository.
 
-Entry points:
+| Entry point | Purpose |
+| --- | --- |
+| `example_modelOCPelectrode_graphite.m` | Process and fit the graphite half-cell. |
+| `example_modelOCPelectrode_NMC.m` | Process and fit the NMC811 half-cell. |
+| `modelElectrodeCapacities.m` | Calculate reference capacities from coating masses and the stated host-mass convention. |
+| `fun/modelOCPelectrode.m` | Run the shared processing and fitting workflow with a settings structure. |
 
-- `modelElectrodeCapacities.m`: calculate capacity from the stated host-mass
-  convention and coating masses. Values are in mAh before the active-material
-  fraction is applied; results remain in the workspace.
-- `example_modelOCPelectrode_graphite.m` and `example_modelOCPelectrode_NMC.m`:
-  electrode-specific settings, processing and MSMR fitting.
-- `fun/modelOCPelectrode.m`: shared half-cell workflow.
-- `modelOCV_commercial.m`, `modelOCV_NMC_graphite.m`, and
-  `modelOCV_NMC_graphite_aged.m`: full-cell processing, requiring their configured
-  private workbooks.
+For direct function use, first add `fun/` to the path. Each function documents
+its syntax, inputs, and outputs in its header.
 
 ```matlab
+addpath(fullfile(pwd, 'fun'))
 [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(settings);
 ```
 
-The examples display figures and return models in memory. Model exports are
-opt-in: `settings.outputFile = ""` disables half-cell saving; the full-cell scripts
-use `saveModel = false` by default. `getDataArbin_XLSX` separately caches imports
-under `.cache/` beside the workbooks, or in an explicit third-argument directory.
-It checks source sizes/timestamps, schema version and the counter setting. Raw workbooks are never
-rewritten. To force reimport, pass `true` as the fourth argument.
+The examples return results in memory and display seven figures. Set
+`settings.outputFile` to a MAT file path to save the model; the default empty
+string disables saving. The destination folder must already exist.
+`getDataArbin_XLSX` caches imported data under `.cache/` beside the workbooks,
+or in its optional third-argument directory. It checks source sizes and
+timestamps, the cache schema, and the counter setting before reusing a cache.
+Pass `true` as its fourth argument to force reimport. Raw workbooks are not
+rewritten.
 
-## Numerical conventions and diagnostics
+## Units and modeling conventions
 
-Potentials are in V versus Li; temperature inputs are in degrees Celsius and are
-converted to kelvin internally. Capacities in the processing/model schema are Ah;
-capacity reference MAT files store `Q_r` in mAh. MSMR `w` is dimensionless in the
-`F*(U-U0)/(R*T*w)` convention. `dZ` is the positive magnitude `-dtheta/dU` [1/V].
-The legacy gallery output `dZj` excludes `F/(R*T)`; multiply by that factor for
-physical gallery derivative magnitudes.
+- Electrode potentials are in V versus Li. Temperature inputs are in degrees
+  Celsius and are converted to kelvin internally.
+- Processing/model capacities are in Ah. The capacity reference files store
+  `Q_r` in mAh, before multiplication by the active-material fraction.
+- MSMR `w` is dimensionless in the `F*(U-U0)/(R*T*w)` convention.
+  `compositionMSMR` returns `dZ = -dtheta/dU`, a positive magnitude in 1/V.
+  Its legacy gallery output `dZj` excludes `F/(R*T)`; multiply by this factor
+  to obtain physical gallery derivative magnitudes.
+- Current integration uses a right-endpoint rectangular rule in Ah. Decreasing
+  test times are rejected. The configured temperature is propagated to the
+  processed branches and the MSMR fit.
 
-Current integration retains the original right-endpoint rectangular rule in Ah.
-Decreasing test times are rejected rather than integrated across a reset. The
-configured temperature is propagated to processed branches and the MSMR fit.
+The capacity script uses the documented host-mass convention, including the
+omission of lithium from the NMC host molar mass. Active-material fractions,
+endpoint anchors, and the NMC hidden-gallery correction are explicit assumptions
+in the examples. They must be reviewed when interpreting absolute lithiation.
 
-`fitMSMR` performs GA followed by `fmincon`, restoring the caller's random stream.
-The parameter bounds, minimum gallery-potential separation, sum of site fractions,
-and positive fitted interval are constrained. A locally converged feasible fit
-can be accepted even when GA used its generation budget. Both stages' exit flags,
-objectives and final constraint violation remain in `fitInfo`.
+`fitMSMR` uses a genetic algorithm followed by `fmincon`. Both examples set the
+random seed to 0, and the fitter restores the caller's random stream. To adjust
+the optimizer, set:
 
 ```matlab
 settings.optimizer.seed = 42;
@@ -75,54 +82,86 @@ settings.optimizer.gaOptions = {'Display', 'off', 'MaxGenerations', 200};
 settings.optimizer.fminconOptions = {'Display', 'off', 'MaxIterations', 1500};
 ```
 
-Check `ocvrel.MSMR.(branch).fitInfo` and voltage residuals before interpreting a
-calibration. Voltage agreement does not identify unobserved transitions or prove
-absolute stoichiometry. Hidden-gallery and active-material corrections remain
-explicit downstream assumptions; their physical interpretation has not been
-changed by this preparation. Initial gallery fractions follow the same
-ascending-potential order as their peak locations.
+The fit constrains parameter bounds, minimum gallery-potential separation,
+the sum of site fractions, and a positive fitted interval. Check
+`ocvrel.MSMR.(branch).fitInfo` and voltage residuals before interpreting a fit.
+The diagnostics include both optimizers' exit flags and objectives, the final
+constraint violation, and the seed. A feasible locally converged fit can be
+accepted even when the genetic algorithm exhausts its generation budget.
+Residual fields use model minus measurement. Voltage agreement alone does not
+establish parameter uniqueness, hidden transitions, or absolute stoichiometry.
 
-## Figures and supplementary snapshot
+## Returned figures and results
 
-`ocpFigures` is 7-by-1, indexed in window order:
+`ocpFigures` contains seven figure handles in window order:
 
 1. Measured half-cell voltage.
 2. Relative processed branches and diagonal-average OCP.
 3. Initial cutoff-based absolute coordinates.
 4. Measured branches and separate MSMR fits on relative coordinates.
-5. Branch fits and mean-parameter curve on absolute coordinates.
-6. Mean-parameter composition, occupations and positive gallery derivatives.
-7. Relative and initial cutoff-based measured OCP, plus the MSMR mean curve
+5. Branch fits and the mean-parameter curve on absolute coordinates.
+6. Mean-parameter composition, occupations, and positive gallery derivatives.
+7. Relative and initial cutoff-based measured OCP, with the MSMR mean curve
    after the configured hidden-gallery transformation.
 
-`supplementaryResults` retains values and figure handles 1--6 before the
-hidden-gallery/active-material corrections. The returned measured LUT is remapped
-later to the final interval, so figure 7 is not a plot of that later remapping.
-The fit to the diagonal-average curve and the arithmetic mean of branch
-parameters are distinct objects. Residual fields use model minus measurement.
+`supplementaryResults` retains values and figure handles 1-6 before the
+hidden-gallery and active-material corrections. The measured lookup table
+returned in `model` is remapped later to the final interval; figure 7 does not
+show that final remapping. The fit to the diagonal-average curve and the
+arithmetic mean of branch parameters are distinct results.
 
-## Public numerical references
+## Public reference data and reproducibility
 
-`input/reference/ocpReferences.mat` is a numerical snapshot of the existing local
-model outputs, without machine-specific function handles. It allows inspection
-without raw workbooks; it does not replace the private inputs required to rerun
-experimental fitting. Its positive absolute calibration differs from modelOCV's
-frozen article inputs. See `input/reference/README.md`.
+The files in `input/reference/` support inspection of the numerical references
+without the experimental workbooks:
 
-## Tests and publication
+| File | Contents |
+| --- | --- |
+| `theoPracCapNeg.mat` | Scalar graphite reference capacity `Q_r` [mAh]. |
+| `theoPracCapPos.mat` | Scalar NMC811 reference capacity `Q_r` [mAh]. |
+| `ocpReferences.mat` | Structures `negative`, `positive`, and `provenance`. Each electrode has matching column vectors `thetaAbsolute` [-], `thetaRelative` [-], and `voltage_V` [V]. |
 
-```matlab
-runModelOCPTests()
-```
+The capacity files are unchanged copies of the existing references. Their
+calculation and assumed coating masses are documented in
+`modelElectrodeCapacities.m`. The OCP arrays were copied without resampling from
+existing average lookup tables, without machine-specific function handles.
+The snapshot provenance identifies its source model files by basename and SHA-256:
 
-Tests cover interpolation, capacity extraction, MSMR conservation/derivatives and
-saturation, asymmetric gallery ordering, import/cache behavior, phase processing,
-and a small synthetic optimizer case. Tiny synthetic workbook fixtures are kept
-in the ignored `.build/` directory for inspection. See `VALIDATION.md` for actual
-results and limitations. Large experimental refits are separate scientific runs.
+| Source model | SHA-256 |
+| --- | --- |
+| `Uocp_n.mat` | `B0761AE0D302650F217BD03196B457563F3DD11AA763473B85515F5A735EB7E3` |
+| `Uocp_p.mat` | `356B4F2F5894C05E9E8E0683BCF292E190B64BD10EB054FB6378FA2D8D70601A` |
 
-Code contributions are CC BY-SA 4.0; numerical references and capacity values are
-CC BY 4.0. Preserve inherited BMS3 attribution; see `LICENSE.md`,
-`DATA_LICENSE.md`, and `THIRD_PARTY_NOTICES.md`. `PUBLISHING.md` explains the
-existing repository history and private-data exclusions. No new release identifier
-or archived DOI is asserted.
+These are existing model outputs, not newly fitted results. The companion
+modelOCV article uses an older frozen snapshot with matching average potential
+arrays but a positive absolute coordinate differing by up to approximately
+0.0041244. The snapshots do not have identical absolute calibration.
+The public references do not replace the private experimental inputs needed to
+repeat the fits. Record the source revision, MATLAB version, fitting settings,
+and data provenance when reporting results.
+
+The development validation record dated November 20, 2026 reports 18 tests passed
+under MATLAB R2024b Update 6 on Windows. Coverage included interpolation,
+capacity extraction, MSMR derivatives and saturation, gallery ordering,
+synthetic Arbin import/cache behavior, phase processing, and a small synthetic
+fit. The synthetic fit checks the optimizer interface with fixed reference
+bounds; it does not demonstrate general experimental parameter recovery. These
+checks do not establish the physical validity of endpoint or hidden-gallery
+assumptions, optimizer uniqueness, or reproducibility of a full experimental
+fit. Development tests and their generated fixtures are kept locally and are
+excluded from the public distribution. The publication cleanup did not rerun
+these tests or refit the experimental models.
+
+## Attribution and citation
+
+Use `CITATION.cff` to cite this implementation and report the source revision.
+The inherited BMS3 functions accompany Gregory L. Plett and M. Scott Trimboli,
+*Battery Management Systems, Volume III: Physics-Based Methods*, Artech House,
+2024. OCP processing follows the methodology of Lu et al. (2021),
+DOI: 10.1149/1945-7111/ac11a4. Cite the relevant methodology sources along with
+the software. The companion article's bibliographic metadata can be added when
+available; no release DOI is assigned here.
+
+Code contributions are licensed under CC BY-SA 4.0. The specified numerical
+reference data are licensed under CC BY 4.0. See `LICENSE.md` for scope and
+third-party attribution.

@@ -10,7 +10,7 @@
 % fzero to determine the potential U corresponding to a specified
 % composition z.
 % The equation solved is:
-%   Z_MSMR(U) - z = 0
+%   z - Z_MSMR(U) = 0
 % where Z_MSMR(U) is the electrode composition calculated by
 % compositionMSMR.
 %

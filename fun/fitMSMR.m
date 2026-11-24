@@ -34,6 +34,8 @@
 %            .ub            Upper parameter bounds.
 %            .optw          Weight applied to the differential-composition
 %                           residual.
+%            .optimizer     Optional structure: seed (default 0), gaOptions,
+%                           and fminconOptions (name/value cell arrays).
 %
 % ocvrel  = Structure containing experimental/estimated OCP curves.
 %
@@ -66,12 +68,15 @@
 %
 % xj       = Composition contribution of each MSMR gallery.
 %
-% Uj       = Equilibrium potential associated with each gallery contribution.
+% Uj       = Experimental potentials repeated for each gallery, J-by-N [V].
 %
 % dZj      = Positive gallery differential magnitudes divided by F/(R*T).
 %
 % fun      = Function handle that calculates the OCP voltage corresponding
 %            to a specified absolute composition (same axis as Zmodfin).
+%
+% fitInfo  = Random seed, GA and fmincon objectives/exit flags/outputs,
+%            maximum constraint violation, success, and gaConverged flags.
 %
 % -- Optimization --
 % The objective function minimizes the combined squared residuals between
@@ -85,9 +90,6 @@
 
 function [paramsfin, Zmodfin, Zrelfin, dZmodfin, xj, Uj, dZj, fun, fitInfo] = fitMSMR(config, ocvrel, TdegC, curve, vis, cons)
 
-% Optional optimizer settings: config.optimizer.seed, .gaOptions, and
-% .fminconOptions. The options fields accept name/value cell arrays;
-% omitted settings retain the defaults below.
 optimizer = struct('seed', 0, 'gaOptions', {{}}, 'fminconOptions', {{}});
 if isfield(config, 'optimizer')
     supplied = config.optimizer;
@@ -105,9 +107,9 @@ rngCleanup = onCleanup(@() rng(rngState)); %#ok<NASGU>
 rng(optimizer.seed, 'twister');
 
     J      = length(config.init.U0); % number of MSMR galleries
-    indU   = 1:J;                    % indicies to U0    in param vectors
-    indX   = J+1:2*J;                % indicies to X     in param vectors
-    indW   = 2*J+1:3*J;              % indicies to omega in param vectors
+    indU   = 1:J;                    % U0 indices in the parameter vector
+    indX   = J+1:2*J;                % X indices in the parameter vector
+    indW   = 2*J+1:3*J;              % w indices in the parameter vector
     weight = config.optw;            % Relative weight to assign to dZdV residuals
     Usep   = 0.001;                  % Minimum voltage separation between peaks (1mV)
     

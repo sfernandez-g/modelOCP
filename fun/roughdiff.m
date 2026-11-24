@@ -1,5 +1,13 @@
 % ROUGHDIFF Approximate differential capacity using first difference.
 %
+% -- Usage --
+% dZ = roughdiff(Z,U)
+%
+% Z and U are paired vectors with at least two samples. Z is dimensionless
+% composition or SOC; U is potential [V] with nonzero consecutive differences.
+% dZ is an N-by-1 signed derivative dZ/dU [1/V], averaged from adjacent
+% interval slopes. The endpoint slopes are used at the boundaries.
+%
 % Copyright (©) 2024 The Regents of the University of Colorado, a body
 % corporate. Created by Gregory L. Plett and M. Scott Trimboli of the
 % University of Colorado Colorado Springs (UCCS). This work is licensed
@@ -12,6 +20,8 @@
 % and M. Scott Trimboli, Battery Management Systems, Volume III:
 % Physics-Based Methods, Artech House, 2024.         
 
+% Modified by Sergio Fernandez Gonzalez: documented usage and derivative units.
+%
 function dZ = roughdiff(Z,U)
   dZ = diff(Z(:))./diff(U(:));
   dZ = ([dZ(1);dZ]+[dZ;dZ(end)])/2; % Avg of fwd/bkwd diffs

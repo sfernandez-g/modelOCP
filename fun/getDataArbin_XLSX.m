@@ -4,7 +4,7 @@
 % test_data = getDataArbin_XLSX(file)
 % test_data = getDataArbin_XLSX(file,step2incrementCounter)
 % test_data = getDataArbin_XLSX(file,step2incrementCounter,save_path)
-% test_data = getDataArbin_XLSX(file,step2incrementCounter,save_path,force_reprocess)
+% test_data = getDataArbin_XLSX(file,step2incrementCounter,save_path,forceReprocess)
 %
 % -- Input --
 % file                  = path to one Arbin XLSX file. If multiple files
@@ -16,16 +16,17 @@
 %                         reliable (optional).
 % save_path             = directory where the processed MAT file is saved
 %                         (optional; defaults to .cache/ beside the XLSX files).
-% force_reprocess       = true to ignore any cached MAT file (optional).
+% forceReprocess        = true to ignore any cached MAT file (default false).
 %
 % -- Output --
 % test_data = structure containing the processed test data, including:
 %             .raw          = raw measurement table
-%             .step         = step number vector
+%             .step         = step number vector; measurement vectors are N-by-1
 %             .t             = test time [s]
 %             .i             = current [A]
 %             .v             = voltage [V]
-%             .Ah            = incremental capacity [Ah]
+%             .capacity      = cumulative signed capacity [Ah]
+%             .step_capacity = signed capacity relative to each step [Ah]
 %             .ch_capacity  = cumulative charge capacity [Ah]
 %             .dch_capacity = cumulative discharge capacity [Ah]
 %             .TC_Counter1  = cycle counter from Arbin or reconstructed

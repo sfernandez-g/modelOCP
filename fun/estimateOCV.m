@@ -1,45 +1,50 @@
-%ESTIMATEOCV Estimate OCV-vs-SOC curve from dis/charge curves using the
-% four methods.
+%ESTIMATEOCV Estimate OCV versus SOC from charge and discharge curves.
 %
 % -- Usage --
 % ocvrel = estimateOCV(elec,config,OCPResolution,OCPEstimators)
 %
 % -- Input --
-% elec   = struct of electrode data from process[OCP|OCV].m
-% config = struct of configuration data for electode (see fields below)
-% arg    = struct of arguments passed to top-level fitOCP function
+% elec   = structure with .name, .cal, and .raw. Each .cal entry contains
+%          disZ, disV, chgZ, chgV, and TdegC, as returned by processCU.
+%          The resistanceBlend method additionally requires .raw entries
+%          with script1 and script3 step/voltage data at current transitions.
+% config = electrode configuration structure (see fields below).
+% OCPResolution = number of points in each interpolation grid.
+% OCPEstimators = cell array selecting 'resistanceBlend', 'voltageAverage',
+%                 'socAverage', and/or 'diagonalAverage'.
 %
 % `config` is a struct with the following fields:
 %
 %   .vmin     = minimum operating voltage [V]
 %   .vmax     = maximum operating voltage [V]
-%   .datype*  = type of diagonal averaging ('useChg','useDis', or 'useAvg')
-%   .daxcorrfiltz* = function used to limit SOC interval over which xcorr 
-%                    of dis/charge dZ-vs-Z curves are evalulated (see below)
-%   .daxcorrfiltv* = function used to limit voltage interval over which xcorr 
-%                    of dis/charge dZ-vs-V curves are evalulated (see below)
+%   .datype   = type of diagonal averaging ('useChg','useDis', or 'useAvg')
+%   .daxcorrfiltz = function used to limit SOC interval over which xcorr
+%                    of charge/discharge dZ-vs-Z curves is evaluated
+%   .daxcorrfiltv = function used to limit voltage interval over which xcorr
+%                    of charge/discharge dZ-vs-V curves is evaluated
 %
 %   The .daxcorrfiltz and .daxcorrfiltv functions accept vectors
 %   of the electrode SOC or voltage, respectively, and return a vector of
-%   logical indicies describing where the cross-correlation should be
+%   logical indices describing where the cross-correlation should be
 %   computed. To use multiple distinct intervals and average the xcorr over
 %   the intervals, return a cell array with an entry for each interval.
+%   These three fields are required only for the diagonalAverage method.
 %
 % -- Output --
-% ocvrel = relative OCV-vs-composition estimates @ each temp (struct array)
+% ocvrel = relative OCV-versus-composition estimates at each temperature
 %          (see fields below)
 %
 % The struct array `ocvrel` has the following fields:
 %
-%   .elecname  : electrode name ('NEG', 'POS', or 'FULL')
+%   .elecname  : electrode name supplied in elec.name
 %   .TdegC     : temperature [degC]
 %   .estimates : struct array with the following fields:
-%     .Z       : relative composition vector
-%     .U       : potential vector [V]
-%     .dZ      : differential capacity vector [V]
+%     .Z       : relative SOC/composition column vector [-]
+%     .U       : potential column vector [V]
+%     .dZ      : signed derivative dZ/dU [1/V], column vector
 %     .name    : name of estimator
-%     .elecname: name of electrode ('NEG', 'POS', or 'FULL') (same as above)
-%     .TdegC   : temperature (for convienence, same as above) [degC]
+%     .elecname: electrode name (same as above)
+%     .TdegC   : temperature (same as above) [degC]
 %
 % Copyright (©) 2024 The Regents of the University of Colorado, a body
 % corporate. Created by Gregory L. Plett and M. Scott Trimboli of the
@@ -53,11 +58,14 @@
 % and M. Scott Trimboli, Battery Management Systems, Volume III:
 % Physics-Based Methods, Artech House, 2024.         
 
+% Modified by Sergio Fernandez Gonzalez: repository-local interpolation and
+% differentiation helpers, diagonal-average processing, and documentation.
+%
 function ocvrel = estimateOCV(elec, config, OCPResolution, OCPEstimators)
 
   % Iterate temperatures.
   clear ocvrel;
-  for kt = length(elec.cal):-1:1 % !!! backwards to struct array doesn't grow
+  for kt = length(elec.cal):-1:1 % Fill backward to allocate the final array size.
     raw = elec.raw(kt);
     cal = elec.cal(kt);
     data = struct;
@@ -85,20 +93,19 @@ function ocvrel = estimateOCV(elec, config, OCPResolution, OCPEstimators)
     
     % Generate OCP estimates from each estimator.
     clear estimates;
-    for ke = length(OCPEstimators):-1:1  % !!! backwards so struct array doesn't grow
+    for ke = length(OCPEstimators):-1:1
       estName = OCPEstimators{ke};
 
       % Generate OCP estimate.
-      estFnName = ['OCP_' estName];  % name of the MATLAB fn to make estimate
-      [Z,U] = feval(estFnName, data, config);  % call MATLAB fn
+      estFnName = ['OCP_' estName];
+      [Z,U] = feval(estFnName, data, config);
 
-      % !!! BUGFIX 2024.26.01: retain data only from vmin to vmax
+      % Restrict the estimate to the configured operating voltage grid.
       Z = linearinterp(U, Z, data.interp.stdV);
       U = data.interp.stdV;
 
       % Calculate differential capacity
       dZ = roughdiff(Z,U);
-      % [Z, U, dZ] = smoothdiff(Z,U);
 
       estimates(ke) = struct('Z',Z,'U',U,'dZ',dZ, ...
                              'name',estName, ...
@@ -119,8 +126,11 @@ end
   
 % OCP Estimators (four methods) -------------------------------------------
 
-% OCP_RESISTANCEBLEND Method #1: "resistance-blending" 
 function [Z, U] = OCP_resistanceBlend(data, ~)
+%OCP_RESISTANCEBLEND Blend branches after compensating current-step voltage jumps.
+%   [Z, U] = OCP_resistanceBlend(data, config) uses data.raw.script1/script3,
+%   data.orig branch vectors, and data.interp.stdZ. config is unused.
+%   Z is the dimensionless SOC column grid; U is the estimated voltage [V].
   
   rawdata = data.raw;
   disZ = data.orig.disZ;
@@ -165,16 +175,22 @@ function [Z, U] = OCP_resistanceBlend(data, ~)
   U  = linearinterp([zChg; zDis],[vChg; vDis],stdZ);  
 end
   
-% OCP_VOLTAGEAVERAGE Method #2: voltage averaging
 function [Z, U] = OCP_voltageAverage(data, ~)
+%OCP_VOLTAGEAVERAGE Average branch voltages at matching SOC values.
+%   [Z, U] = OCP_voltageAverage(data, config) uses data.interp.stdZ and the
+%   interpolated chgV/disV vectors. config is unused. Z is dimensionless;
+%   U is the averaged voltage [V]. Both outputs are column vectors.
   
   Z = data.interp.stdZ;
   U = (data.interp.chgV+data.interp.disV)/2;
   
 end
   
-% OCP_SOCAVERAGE Method #3: SOC averaging
 function [Z, U] = OCP_socAverage(data, ~)
+%OCP_SOCAVERAGE Average branch SOC values at matching voltages.
+%   [Z, U] = OCP_socAverage(data, config) averages data.interp.chgZ/disZ on
+%   stdV, then interpolates to stdZ. config is unused. Z is dimensionless;
+%   U is voltage [V]. Both outputs are column vectors.
   
   stdZ = data.interp.stdZ;
   stdV = data.interp.stdV;
@@ -186,8 +202,12 @@ function [Z, U] = OCP_socAverage(data, ~)
   
 end
   
-% OCP_DIAGONALAVERAGE Method #4: Diagonal interpolation
 function [Z, U] = OCP_diagonalAverage(data, config)
+%OCP_DIAGONALAVERAGE Align branches using differential-capacity correlations.
+%   [Z, U] = OCP_diagonalAverage(data, config) uses data.orig/data.interp and
+%   config.daxcorrfiltv/daxcorrfiltz to estimate voltage and SOC shifts.
+%   config.datype selects 'useDis', 'useChg', or 'useAvg' after alignment.
+%   Z is the dimensionless SOC column grid; U is the estimated voltage [V].
   
   stdV = data.interp.stdV;
   disZ = data.interp.disZ;
@@ -226,7 +246,7 @@ function [Z, U] = OCP_diagonalAverage(data, config)
   end
   lagZ = mean(lagZ);
   
-  % Interpolate ocv (using discharge data only)
+  % Shift both branches toward the equilibrium curve before interpolation.
   uuD = data.orig.disV+lagU/2;
   zzD = data.orig.disZ+lagZ/2;
   U4D = linearinterp(zzD,uuD,stdZ);

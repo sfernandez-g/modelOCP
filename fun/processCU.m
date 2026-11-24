@@ -27,9 +27,8 @@
 % -- Output --
 % cal = structure containing the processed constant-current/constant-
 %       voltage data, including:
-%       .name             = cell/test name
-%       .TdegC            = test temperature [degC]
-%       .Q25              = reference capacity at 25 degC [Ah]
+%       .TdegC            = default temperature, 25 [degC]; the caller may override
+%       .QAh              = reference discharge capacity [Ah]
 %       .C_rate_actual    = actual average C-rate [1/h]
 %       .disZ             = discharge SOC/lithiation vector [unitless]
 %       .disV             = discharge voltage vector [V]
@@ -39,6 +38,8 @@
 %       .chgdZ            = charge differential lithiation [1/V]
 %       .disI             = discharge current vector [A]
 %       .chgI             = charge current vector [A]
+% Branch vectors are columns; smoothed voltage/SOC and raw current/time
+% vectors can have different lengths.
 %
 % The function identifies the configured steps using both the Arbin
 % step index and TC_Counter1, extracts the corresponding charge and

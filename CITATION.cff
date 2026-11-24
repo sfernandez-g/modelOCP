@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "Cite this implementation together with the BMS3 and Lu methodology sources identified in THIRD_PARTY_NOTICES.md. Report the source revision and fitting settings."
+message: "Cite this implementation together with the BMS3 and Lu methodology sources identified in README.md. Report the source revision and fitting settings."
 title: "modelOCP: half-cell OCP processing and MSMR electrode fitting"
 type: software
 authors:

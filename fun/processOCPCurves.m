@@ -2,12 +2,25 @@
 %
 % [cal,ocvrel,estimators] = processOCPCurves(testData,cfg,channels,channelIndex,...
 %     cellName,voltageFilter,socFilter,resolution)
+% [cal,ocvrel,estimators] = processOCPCurves(testData,cfg,channels,channelIndex,...
+%     cellName,voltageFilter,socFilter,resolution,temperatureDegC)
+%
+% testData is the Arbin import structure. cfg, channels, and channelIndex
+% select the test steps and voltage channel as documented in processCU.
+% cellName identifies the electrode. voltageFilter is [min max] [V];
+% socFilter maps a dimensionless SOC vector to a logical selection mask.
+% Both filters select the intervals used for diagonal-average correlation.
+% resolution is the number of interpolation points. temperatureDegC is
+% optional and defaults to 25 [degC].
+%
+% cal contains the processed branches and reference capacity QAh [Ah].
+% ocvrel contains the discharge, charge, and diagonal-average estimates.
+% estimators is a cell array of their names in the returned order.
 %
 % Plotting, absolute-lithiation assumptions, and model fitting remain the
 % responsibility of the calling workflow.
 function [cal, ocvrel, estimators] = processOCPCurves(testData, cfg, channels, channelIndex, cellName, voltageFilter, socFilter, resolution, temperatureDegC)
 
-% The optional ninth argument is temperature [degC], default 25.
 if nargin < 9, temperatureDegC = 25; end
 validateattributes(temperatureDegC, {'numeric'}, {'scalar', 'real', 'finite', '>', -273.15});
 cal = processCU(testData, cfg, channels, channelIndex);

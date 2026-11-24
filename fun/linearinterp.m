@@ -1,15 +1,17 @@
 % LINEARINTERP Linearly interpolate and extrapolate data.
 %
 % -- Usage --
-% yq = LINEARINTERP(x,y,xq)
+% yq = linearinterp(x,y,xq)
 %
 % -- Input --
 % x,y = vectors describing a function y = f(x);
 %       x does not need to be sorted.
-% xq  = query points at which to evalulate the output
+% xq  = query points at which to evaluate the output; any array shape.
 %
 % -- Output --
-% yq  = vector of function values at the query points: yq = f(xq) 
+% yq  = function values at the query points, with the same shape as xq.
+% Duplicate x values are combined by averaging their y values. At least
+% two distinct x values are required; extrapolation is linear.
 %
 % Copyright (©) 2024 The Regents of the University of Colorado, a body
 % corporate. Created by Gregory L. Plett and M. Scott Trimboli of the
@@ -23,6 +25,9 @@
 % and M. Scott Trimboli, Battery Management Systems, Volume III:
 % Physics-Based Methods, Artech House, 2024.         
 
+% Modified by Sergio Fernandez Gonzalez: input validation, duplicate-sample
+% averaging, query-shape preservation, and documentation updates.
+%
 function yq = linearinterp(x, y, xq)
 
     validateattributes(x, {'numeric'}, {'vector','real','finite','nonempty'}, mfilename, 'x');

@@ -5,7 +5,7 @@
 %
 % -- Input --
 % ocvrel   = OCV structure containing the estimated OCV curves.
-% cellData = structure containing the processed cell data from processCU.
+% cellData = structure with .cal from processCU and .name identifying the cell.
 % name     = curve to add:
 %            "discharge" -> adds the discharge curve
 %            "charge"    -> adds the charge curve

@@ -4,7 +4,7 @@
 % Requires the experimental workbook, capacity MAT file, and fitting toolboxes.
 
 repoRoot = fileparts(mfilename('fullpath'));
-addpath(repoRoot); setupModelOCP();
+addpath(fullfile(repoRoot, 'fun'));
 settings = struct;
 
 %% Experimental inputs
@@ -24,7 +24,7 @@ settings.galleryCount = 4;
 settings.boundScales = [0.3 0.2 0.1]; % Lower-bound factors for U0, X, w.
 settings.differentialWeight = 1e-2;
 settings.optimizer.seed = 0; % Reproducible GA initialization.
-settings.hiddenGalleryCorrection = true; % Retain the original NMC assumption.
+settings.hiddenGalleryCorrection = true; % Apply the assumed hidden-gallery correction.
 
 %% Optional figure settings
 % Each inset row is [left bottom width height xmin xmax].

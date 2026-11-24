@@ -32,8 +32,8 @@
 % and M. Scott Trimboli, Battery Management Systems, Volume III:
 % Physics-Based Methods, Artech House, 2024.
 %
-% Modified by Fernandez Gonzalez Sergio:
-% Added "x array monotonical" and some comments
+% Modified by Sergio Fernandez Gonzalez: input validation, monotonic x-grid
+% resampling, repository-local interpolation, and documentation updates.
 
 function [xout, vout, dx] = smoothdiff(x, v, dv, tol, n)
 
@@ -85,7 +85,7 @@ dx = (xmax-xmin)/n*Nv/dv;
 % Interpolate output soc.
 xout = linearinterp(v, x, vout);
 
-% Force the boundaries to agree with the original data-set.
+% Force the boundaries to agree with the original dataset.
 [~, ind0] = min(xout);
 xout(ind0) = xmin;
 [~, ind1] = max(xout);

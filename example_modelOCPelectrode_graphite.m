@@ -4,7 +4,7 @@
 % Requires the experimental workbook, capacity MAT file, and fitting toolboxes.
 
 repoRoot = fileparts(mfilename('fullpath'));
-addpath(repoRoot); setupModelOCP();
+addpath(fullfile(repoRoot, 'fun'));
 settings = struct;
 
 %% Experimental inputs
@@ -19,7 +19,7 @@ settings.activeMaterialFraction = 0.98; % Assumed graphite active-material fract
 settings.lithiationAnchor = "delithiated"; % Assume theta_min = 0.
 
 %% MSMR fitting inputs
-% Six-gallery literature initialization (Verbrugge 2017); retained from the original workflow.
+% Six-gallery literature initialization (Verbrugge 2017).
 settings.initialMSMR.U0 = [0.08843;0.12799;0.14331;0.16984;0.21446;0.36325]; % V.
 settings.initialMSMR.X = [0.43336;0.23963;0.15018;0.05462;0.06744;0.0548]; % Dimensionless.
 settings.initialMSMR.w = [0.08611;0.08009;0.72469;2.53277;0.09470;5.97354];

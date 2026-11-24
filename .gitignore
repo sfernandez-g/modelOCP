@@ -2,7 +2,6 @@
 /input/*
 !/input/reference/
 /input/reference/*
-!/input/reference/README.md
 !/input/reference/ocpReferences.mat
 !/input/reference/theoPracCapNeg.mat
 !/input/reference/theoPracCapPos.mat
@@ -18,3 +17,13 @@ matlab_crash_dump*
 Thumbs.db
 .vscode/
 .idea/
+
+# Publish only the main documentation and license; retain other notes locally.
+*.md
+!/README.md
+!/LICENSE.md
+
+# Development tools and tests remain local.
+/tests/
+/runModelOCPTests.m
+/setupModelOCP.m

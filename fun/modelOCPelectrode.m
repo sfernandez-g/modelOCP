@@ -101,31 +101,23 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     faradayConstant = 96485.3329; % C/mol.
     thermalFactor = faradayConstant/(gasConstant*(temperatureDegC + 273.15)); % 1/V.
 
-    %% add utility paths
     addpath(fullfile(repoRoot, "fun"));
 
-    %% process OCP data
+    %% Process OCP data
     file = settings.inputFile;
-    %--------------------------------------------------------------------------
     cellName = settings.cellName; 
-    %--------------------------------------------------------------------------
     v_range = settings.voltageRange;
-    % -------------------------------------------------------------------------
     sol_range   = [0 1];
-    % -------------------------------------------------------------------------
     capacity = load(settings.capacityFile, 'Q_r');
     validateattributes(capacity.Q_r, {'numeric'}, {'scalar', 'real', 'finite', 'positive'});
     Q_r = capacity.Q_r*1e-3; % Capacity file stores Q_r in mAh; use Ah below.
     AM_per = settings.activeMaterialFraction;
     Q_r_AM  = Q_r*AM_per;
-    % -------------------------------------------------------------------------
     test_data = getDataArbin_XLSX(file, 7); % filename, step where TC increments
-    % -------------------------------------------------------------------------
     ocpFigures(1) = figure('Name', sprintf('1. %s: Measured half-cell voltage', settings.electrodeName), 'NumberTitle', 'off');
     plot(test_data.t./3600, test_data.v, DisplayName='Voltage'); hold on;
     xlabel('Time (h)'); ylabel('Voltage (V)'); legend(Location="best");
     thesisFormat;
-    % -------------------------------------------------------------------------
     cfg = struct('name', {'CC_dis','CV_dis','CC_chg','CV_chg'}, ... % test phases
                  'step', {5, 6, 3, 4}, ...                          % step values of phases for processing
                  'counter', {1, 1, 1, 1} ...                        % counter values of phases for processing
@@ -134,7 +126,6 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     filtv = settings.voltageRange;
     [cal, ocvrel, OCVestimators] = processOCPCurves(test_data, cfg, ...
         voltChannels, 1, cellName, filtv, @(Z) 0 < Z & Z < 0.1, 2e3, temperatureDegC);
-    % -------------------------------------------------------------------------
     ocpFigures(2) = figure('Name', sprintf('2. %s: OCP on relative lithiation axis', settings.electrodeName), 'NumberTitle', 'off');
     for k = 1:length(ocvrel.estimates)
         plot(1-ocvrel.estimates(k).Z, ocvrel.estimates(k).U); hold on
@@ -157,7 +148,7 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     thesisFormat;
 
     %% Rough estimate of absolute lithiation
-    % Preserve the original endpoint assumptions and branch choices.
+    % Anchor absolute lithiation to the configured charge/discharge endpoint.
     if settings.lithiationAnchor == "delithiated"
         idx = find(string({ocvrel.estimates.name}) == "charge", 1);
         ocvrel.theta_min = 0;
@@ -171,7 +162,6 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
         Z = 1 - ocvrel.estimates(k).Z;                                  % Change SOC to relative lithiation
         ocvrel.estimates(k).theta = ocvrel.theta_min + Z .* (ocvrel.theta_max - ocvrel.theta_min);
     end
-    % -------------------------------------------------------------------------
     ocpFigures(3) = figure('Name', sprintf('3. %s: Cutoff-based absolute lithiation', settings.electrodeName), 'NumberTitle', 'off');
     for k = 1:length(ocvrel.estimates)
         plot(ocvrel.estimates(k).theta, ocvrel.estimates(k).U)
@@ -342,7 +332,6 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     ylabel('Potential vs. Li (V)');
     ylim(v_range); xlim(sol_range);
     legend(Location='best');
-    % --------------------------------------------------
     subplot(1, 3, 2);
     for k = 1:size(ocvrel.MSMR.average.xj, 1)
         plot(ocvrel.MSMR.average.xj(k, :), ocvrel.MSMR.average.Uj(k, :), DisplayName=sprintf('$j$ = %d', k)); hold on
@@ -351,7 +340,6 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     ylabel('Potential vs. Li (V)');
     ylim(v_range);
     legend(Location='best');
-    % --------------------------------------------------
     subplot(1, 3, 3);
     for k = 1:size(ocvrel.MSMR.average.dZj, 1)
         plot(ocvrel.MSMR.average.Uj(k, :), thermalFactor*ocvrel.MSMR.average.dZj(k, :), DisplayName=sprintf('$j$ = %d', k)); hold on
@@ -363,14 +351,13 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     thesisFormat;
     drawnow
 
-    %% Supplementary S3.3: retain results before AM/hidden-gallery corrections
+    %% Supplementary results before active-material and hidden-gallery corrections
     % Value copies keep the fitted intervals and galleries available after later edits.
     supplementaryResults = struct('electrode', settings.electrodeName, ...
         'temperatureDegC', temperatureDegC, 'raw', ocvrel.estimates, 'MSMR', ocvrel.MSMR, ...
         'configuration', config, 'halfCellCharge_Ah', ocvrel.Q, ...
         'initialCapacity_Ah', Q_r_AM, 'figures', ocpFigures(1:6));
     %% Optional hidden-gallery correction (after the supplementary snapshot)
-    % Retain the original transformation; the snapshot above precedes it.
     if settings.hiddenGalleryCorrection
         for curve = MSMR_curves
             ocvrel.MSMR.(curve).params.thetamin = ocvrel.theta_min;
@@ -380,12 +367,11 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
         end
     end
 
-    %% AM correction (after the supplementary snapshot)
+    %% Active-material correction (after the supplementary snapshot)
     Q_MSMR      = ocvrel.Q/(ocvrel.MSMR.average.params.thetamax - ocvrel.MSMR.average.params.thetamin);
     AM_per_diff = Q_MSMR/Q_r - AM_per;
     AM_per      = AM_per + AM_per_diff;
     Q_r_AM      = Q_r*AM_per;                          % corrected sample capacity
-    % --------------------------------------------------
     idx = find(string({ocvrel.estimates.name}) == "diagonalAverage");
     ocpFigures(7) = figure('Name', sprintf('7. %s: Relative, cutoff-based, and MSMR average OCP', settings.electrodeName), 'NumberTitle', 'off');
     plot(1-ocvrel.estimates(idx).Z, ocvrel.estimates(idx).U, DisplayName='$U_\mathrm{ocp}\bigl(\tilde\theta^\mathrm{r}\bigr)$'); hold on
@@ -410,17 +396,13 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     end
     thesisFormat;
     drawnow
-    % --------------------------------------------------
-    for k = 1:length(ocvrel.estimates)  % Change absolut lithiation range to match MSMR
+    for k = 1:length(ocvrel.estimates)  % Map absolute lithiation to the fitted MSMR interval.
         ocvrel.estimates(k).theta = ocvrel.MSMR.average.params.thetamin + (1 - ocvrel.estimates(k).Z) .* (ocvrel.MSMR.average.params.thetamax - ocvrel.MSMR.average.params.thetamin);
     end
 
     %% Assemble the reusable model; save only when explicitly requested
-    % ---- Uocp estimates
     model.raw = ocvrel.estimates;
-    % ---- MSMR
     model.MSMR = ocvrel.MSMR;
-    % ---- LUT
     model.LUT.theta_ch     = model.raw(find(string(OCVestimators) == "charge")).theta;
     model.LUT.thetarel_ch  = (1 - model.raw(find(string(OCVestimators) == "charge")).Z);
     model.LUT.U_ch         = model.raw(find(string(OCVestimators) == "charge")).U;
@@ -435,16 +417,13 @@ function [model, ocvrel, supplementaryResults, ocpFigures] = modelOCPelectrode(s
     model.LUT.thetarel_avg = (1 - model.raw(find(string(OCVestimators) == "diagonalAverage")).Z);
     model.LUT.U_avg        = model.raw(find(string(OCVestimators) == "diagonalAverage")).U;
     model.LUT.UocpAvg      = @(theta) linearinterp(model.LUT.theta_avg, model.LUT.U_avg, theta);
-    % ---- fcn
     model.zToTheta = @(z) z .* (model.MSMR.average.params.thetamin - model.MSMR.average.params.thetamax) + model.MSMR.average.params.thetamax;
     model.thetaToZ = @(theta) (theta - model.MSMR.average.params.thetamax) ./ (model.MSMR.average.params.thetamin - model.MSMR.average.params.thetamax);
-    % --------------------------------------------------
     model.Q25 = ocvrel.Q;
     model.Qnom = Q_r_AM;
     % Retain the experimental assumptions and fit settings alongside the LUT.
     model.provenance = struct('settings', settings, 'configuration', config, ...
         'matlabVersion', version, 'calibration', 'MSMR interval after configured corrections');
-    % --------------------------------------------------
     if strlength(string(settings.outputFile)) > 0
         save(settings.outputFile, 'model');
     end
@@ -452,6 +431,8 @@ end
 
 function insetAxes = createInset(mainAxes, inset)
 %CREATEINSET Create an inset associated with its main axes for formatting.
+%   insetAxes = createInset(mainAxes, inset) uses the first four values of
+%   inset as [left bottom width height] in normalized figure coordinates.
     inset = inset(:).';
     insetAxes = axes('Parent', ancestor(mainAxes, 'figure'), ...
         'Units', 'normalized', 'Position', inset(1:4), 'Box', 'on');
