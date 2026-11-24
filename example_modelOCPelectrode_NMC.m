@@ -10,7 +10,7 @@ settings = struct;
 %% Experimental inputs
 settings.inputFile = fullfile(repoRoot, 'input', 'pos', ...
     'checkUp_LGMH1_PAT20261302_NMC3_Li_T25_Channel_16_Wb_1.xlsx');
-settings.capacityFile = fullfile(repoRoot, 'input', 'reference', 'theoPracCapPos.mat'); % Q_r [mAh].
+settings.capacityFile = fullfile(repoRoot, 'output', 'theoPracCapPos.mat'); % Q_r [mAh].
 settings.cellName = 'LG MH1 PAT half-cell PE';
 settings.electrodeName = 'NMC811';
 settings.temperatureDegC = 25;

@@ -10,7 +10,7 @@ settings = struct;
 %% Experimental inputs
 settings.inputFile = fullfile(repoRoot, 'input', 'neg', ...
     'checkUp_LGMH1_PAT20261302_G1_Li_T25_Channel_2_Wb_1.xlsx');
-settings.capacityFile = fullfile(repoRoot, 'input', 'reference', 'theoPracCapNeg.mat'); % Q_r [mAh].
+settings.capacityFile = fullfile(repoRoot, 'output', 'theoPracCapNeg.mat'); % Q_r [mAh].
 settings.cellName = 'LG MH1 PAT half-cell NE';
 settings.electrodeName = 'Graphite';
 settings.temperatureDegC = 25;
